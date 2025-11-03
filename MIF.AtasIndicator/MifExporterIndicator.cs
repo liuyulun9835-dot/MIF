@@ -10,8 +10,8 @@ namespace MIF.AtasIndicator
 {
     public class MifExporterIndicatorV4 : Indicator
     {
-        private readonly string _outPath;
-        private readonly string _alivePath;
+        private readonly string? _outPath;
+        private readonly string? _alivePath;
         private static int _hb;
 
         public MifExporterIndicatorV4()
@@ -45,6 +45,8 @@ namespace MIF.AtasIndicator
 
         protected override void OnCalculate(int bar, decimal value)
         {
+            if (_alivePath == null || _outPath == null) return;
+
             if ((_hb++ & 63) == 0)
                 File.AppendAllText(_alivePath, $"{DateTime.UtcNow:o} bar={bar}\n");
 
@@ -78,10 +80,10 @@ namespace MIF.AtasIndicator
                 var level = levelsList[i];
                 if (level != null)
                 {
-                    ask[i] = level.Ask;
-                    bid[i] = level.Bid;
-                    realizedBuy += level.Ask;
-                    realizedSell += level.Bid;
+                    ask[i] = (double)level.Ask;
+                    bid[i] = (double)level.Bid;
+                    realizedBuy += (double)level.Ask;
+                    realizedSell += (double)level.Bid;
                 }
             }
 
