@@ -58,6 +58,41 @@ namespace MIF.AtasIndicator
                 return;
             }
 
+            // 在 OnCalculate 开头添加（每100个bar测试一次）
+            if (bar > 0 && bar % 100 == 0)
+            {
+                try
+                {
+                    // 测试 DOM API
+                    var domTest = ChartInfo?.GetMarketDepthSnapshot?.Invoke(bar, candle.Time);
+
+                    if (domTest == null)
+                    {
+                        File.AppendAllText(_alivePath,
+                            $"[DOM-TEST] Bar {bar}: API returned null\n");
+                    }
+                    else
+                    {
+                        // 尝试访问属性
+                        var askCount = domTest.Asks?.Count ?? 0;
+                        var bidCount = domTest.Bids?.Count ?? 0;
+                        var bestAsk = domTest.Asks?.FirstOrDefault();
+                        var bestBid = domTest.Bids?.FirstOrDefault();
+
+                        File.AppendAllText(_alivePath,
+                            $"[DOM-TEST] Bar {bar}: SUCCESS - " +
+                            $"Asks={askCount}, Bids={bidCount}, " +
+                            $"BestAsk={bestAsk?.Price}@{bestAsk?.Volume}, " +
+                            $"BestBid={bestBid?.Price}@{bestBid?.Volume}\n");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    File.AppendAllText(_alivePath,
+                        $"[DOM-TEST] Bar {bar}: EXCEPTION - {ex.Message}\n");
+                }
+            }
+
             var allLevels = candle.GetAllPriceLevels();
             if (allLevels == null)
             {
