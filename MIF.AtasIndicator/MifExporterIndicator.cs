@@ -117,15 +117,16 @@ namespace MIF.AtasIndicator
                          && Math.Abs(bid.Sum() - realizedSell) <= 1e-2;
 
             // 6) JSONL
-            var now = DateTime.UtcNow;
+            var tOpen = candle.Time;
+            var tClose = tOpen.AddMinutes(1);
             var rec = new
             {
                 header = new
                 {
                     symbol = "BTCUSDT",
                     timeframe = "1m",
-                    t_open = now.ToString("o"),
-                    t_close = now.AddMinutes(1).ToString("o"),
+                    t_open = tOpen.ToString("o"),
+                    t_close = tClose.ToString("o"),
                     version = "mif.v1.1",
                     exporter = "MIF.AtasIndicator",
                     window_convention = "UTC-right-closed"
@@ -160,7 +161,9 @@ namespace MIF.AtasIndicator
             {
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             });
-            File.AppendAllText(_outPath, json + "\n");
+            var dateKey = tOpen.ToString("yyyyMMdd");
+            var dailyPath = Path.Combine(Path.GetDirectoryName(_outPath)!, $"bars_{dateKey}.jsonl");
+            File.AppendAllText(dailyPath, json + "\n");
         }
     }
 }
