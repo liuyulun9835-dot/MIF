@@ -12,21 +12,27 @@ using System.ComponentModel.DataAnnotations;
 namespace MIF.AtasIndicator
 {
     /// <summary>
-    /// MIF ATAS导出器 V16 - DOM/Cluster解耦版
+    /// MIF ATAS导出器 V17 - DOM/Cluster解耦版 + 活性检测
     ///
-    /// V16关键更新：
-    /// 1. DOM/Cluster完全解耦 - epsilon仅来自DOM，cluster独立导出
-    /// 2. 新增导出开关 - ExportDom, ExportCluster, IncludeClusterPrices
-    /// 3. 消除cluster_fallback - DOM不可用时epsilon标记为"unavailable"
-    /// 4. Cluster价格仅作标签 - 不参与ε计算，仅供参考
+    /// V17关键更新：
+    /// 1. DOM活性自检 - 检测并自动降级重复的DOM数据
+    /// 2. 深拷贝保护 - 防止数组引用复用导致数据沿用
+    /// 3. 增强统计 - DOM细分(levels/cumulative/unavailable) + Cluster详情
+    /// 4. Bug修复 - urgency.ratio改为正确的u_buy/u_sell比值
+    ///
+    /// V16基础特性（保留）：
+    /// - DOM/Cluster完全解耦 - epsilon仅来自DOM，cluster独立导出
+    /// - 新增导出开关 - ExportDom, ExportCluster, IncludeClusterPrices
+    /// - 消除cluster_fallback - DOM不可用时epsilon标记为"unavailable"
+    /// - Cluster价格仅作标签 - 不参与ε计算，仅供参考
     ///
     /// V14基础特性（保留）：
     /// - 完整性保证 - OnDispose时回溯处理所有历史bars
     /// - OHLCV数据 - 完整的1分钟K线数据
     /// - 固定维度 - 保证数据维度一致性
     /// </summary>
-    [DisplayName("MIF Exporter V16")]
-    public class MifExporterV16 : Indicator
+    [DisplayName("MIF Exporter V17")]
+    public class MifExporterV17 : Indicator
     {
         #region 配置参数
         
@@ -175,9 +181,9 @@ namespace MIF.AtasIndicator
         
         #endregion
         
-        public MifExporterV16()
+        public MifExporterV17()
         {
-            Name = "MIF Exporter V16";
+            Name = "MIF Exporter V17";
             
             try
             {
@@ -201,7 +207,7 @@ namespace MIF.AtasIndicator
                     
                     File.AppendAllText(_alivePath,
                         $"\n{new string('=', 80)}\n" +
-                        $"[V16-START] {DateTime.UtcNow:o}\n" +
+                        $"[V17-START] {DateTime.UtcNow:o}\n" +
                         $"DLL: {asm}\n" +
                         $"Version: {version}\n" +
                         $"Modified: {File.GetLastWriteTime(asm):o}\n" +
@@ -486,8 +492,8 @@ namespace MIF.AtasIndicator
                     timeframe = "1m",
                     t_open = tOpen.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
                     t_close = tClose.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
-                    version = "mif.v16.0",
-                    exporter = "MIF.AtasIndicator.V16",
+                    version = "mif.v17.0",
+                    exporter = "MIF.AtasIndicator.V17",
                     fixed_dimension = true,
                     dimension_size = _maxLevels
                 },
@@ -780,7 +786,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"\n[V16-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
+                        $"\n[V17-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
                 }
                 
                 int backtrackCount = 0;
@@ -803,7 +809,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"[V16-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
+                        $"[V17-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
                 }
             }
             catch (Exception ex)
@@ -840,7 +846,7 @@ namespace MIF.AtasIndicator
 
                 File.AppendAllText(_alivePath,
                     $"\n{new string('=', 80)}\n" +
-                    $"[V16-END] {DateTime.UtcNow:o}\n" +
+                    $"[V17-END] {DateTime.UtcNow:o}\n" +
                     $"Session Summary:\n" +
                     $"  Duration: {uptime.TotalMinutes:F1} minutes\n" +
                     $"  Total bars processed: {_totalBars}\n" +
