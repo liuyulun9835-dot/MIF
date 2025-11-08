@@ -95,11 +95,20 @@ namespace MIF.AtasIndicator
             var t = target.GetType();
             foreach (var name in methodNames)
             {
-                var m = t.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (m is null) continue;
-                var pars = m.GetParameters();
-                if (pars.Length == args.Length && (pars.Length == 0 || pars[0].ParameterType == typeof(int)))
-                    return m.Invoke(target, args);
+                // 使用 GetMethods 避免 AmbiguousMatchException
+                var methods = t.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                               .Where(m => m.Name == name)
+                               .ToArray();
+
+                if (methods.Length == 0) continue;
+
+                // 查找匹配参数数量和类型的方法
+                foreach (var m in methods)
+                {
+                    var pars = m.GetParameters();
+                    if (pars.Length == args.Length && (pars.Length == 0 || pars[0].ParameterType == typeof(int)))
+                        return m.Invoke(target, args);
+                }
             }
             return null;
         }
