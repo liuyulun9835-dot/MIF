@@ -11,8 +11,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using ATAS.Indicators;
-using ATAS.Indicators.Helpers;
-using ATAS.Indicators.Technical;
 
 namespace MIF.AtasIndicator
 {

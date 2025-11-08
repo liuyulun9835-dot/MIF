@@ -3,8 +3,6 @@ using System.Collections;
 using System.Linq;
 using System.Reflection;
 using ATAS.Indicators;
-using ATAS.Indicators.Helpers;
-using ATAS.Indicators.Technical;
 
 namespace MIF.AtasIndicator
 {
