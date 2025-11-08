@@ -138,5 +138,48 @@ namespace MIF.AtasIndicator
             }
             return allowNull ? null : 0.0;
         }
+
+        // === V18: 统一通过接口拿 price levels，规避重载/缓存歧义 ===
+        public static bool TryGetClusterLevels(object indicator, int bar, out PriceLevelDTO[] levels)
+        {
+            levels = Array.Empty<PriceLevelDTO>();
+            try
+            {
+                var core = indicator as Indicator;
+                if (core is null) return false;
+
+                var candle = core.GetCandle(bar); // 官方推荐：先取 bar 的 IndicatorCandle
+                // 关键：转到接口再取"无参"重载，避免 cacheItem 语义/版本差异
+                if (candle is ISupportedPriceInfo spi)
+                {
+                    var infos = spi.GetAllPriceLevels(); // IEnumerable<PriceVolumeInfo>
+                    var list = new System.Collections.Generic.List<PriceLevelDTO>();
+                    foreach (var pvi in infos)
+                    {
+                        // 价格可空 → 只做 label
+                        double? price = null;
+                        try { price = (double?)pvi.Price; } catch { /* keep null */ }
+
+                        list.Add(new PriceLevelDTO
+                        {
+                            Ask = (double)pvi.Ask,
+                            Bid = (double)pvi.Bid,
+                            Price = price
+                        });
+                    }
+                    levels = list.ToArray();
+                    return levels.Length > 0;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+    }
+
+    public sealed class PriceLevelDTO
+    {
+        public double Ask { get; set; }
+        public double Bid { get; set; }
+        public double? Price { get; set; } // 仅 label
     }
 }
