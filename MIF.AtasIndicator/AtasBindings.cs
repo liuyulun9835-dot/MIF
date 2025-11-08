@@ -3,6 +3,8 @@ using System.Collections;
 using System.Linq;
 using System.Reflection;
 using ATAS.Indicators;
+using ATAS.Indicators.Helpers;
+using ATAS.Indicators.Technical;
 
 namespace MIF.AtasIndicator
 {
@@ -156,14 +158,31 @@ namespace MIF.AtasIndicator
                     var list = new System.Collections.Generic.List<PriceLevelDTO>();
                     foreach (var pvi in infos)
                     {
-                        // 价格可空 → 只做 label
+                        if (pvi == null) continue;
+
+                        double ask;
+                        double bid;
+                        try { ask = Convert.ToDouble(pvi.Ask); } catch { continue; }
+                        try { bid = Convert.ToDouble(pvi.Bid); } catch { continue; }
+
                         double? price = null;
-                        try { price = (double?)pvi.Price; } catch { /* keep null */ }
+                        try
+                        {
+                            var rawPrice = pvi.Price;
+                            if (rawPrice != null)
+                            {
+                                price = Convert.ToDouble(rawPrice);
+                            }
+                        }
+                        catch
+                        {
+                            price = null;
+                        }
 
                         list.Add(new PriceLevelDTO
                         {
-                            Ask = (double)pvi.Ask,
-                            Bid = (double)pvi.Bid,
+                            Ask = ask,
+                            Bid = bid,
                             Price = price
                         });
                     }
