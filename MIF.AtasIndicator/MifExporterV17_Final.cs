@@ -12,21 +12,27 @@ using System.ComponentModel.DataAnnotations;
 namespace MIF.AtasIndicator
 {
     /// <summary>
-    /// MIF ATAS导出器 V16 - DOM/Cluster解耦版
+    /// MIF ATAS导出器 V17 - DOM/Cluster解耦版 + 活性检测
     ///
-    /// V16关键更新：
-    /// 1. DOM/Cluster完全解耦 - epsilon仅来自DOM，cluster独立导出
-    /// 2. 新增导出开关 - ExportDom, ExportCluster, IncludeClusterPrices
-    /// 3. 消除cluster_fallback - DOM不可用时epsilon标记为"unavailable"
-    /// 4. Cluster价格仅作标签 - 不参与ε计算，仅供参考
+    /// V17关键更新：
+    /// 1. DOM活性自检 - 检测并自动降级重复的DOM数据
+    /// 2. 深拷贝保护 - 防止数组引用复用导致数据沿用
+    /// 3. 增强统计 - DOM细分(levels/cumulative/unavailable) + Cluster详情
+    /// 4. Bug修复 - urgency.ratio改为正确的u_buy/u_sell比值
+    ///
+    /// V16基础特性（保留）：
+    /// - DOM/Cluster完全解耦 - epsilon仅来自DOM，cluster独立导出
+    /// - 新增导出开关 - ExportDom, ExportCluster, IncludeClusterPrices
+    /// - 消除cluster_fallback - DOM不可用时epsilon标记为"unavailable"
+    /// - Cluster价格仅作标签 - 不参与ε计算，仅供参考
     ///
     /// V14基础特性（保留）：
     /// - 完整性保证 - OnDispose时回溯处理所有历史bars
     /// - OHLCV数据 - 完整的1分钟K线数据
     /// - 固定维度 - 保证数据维度一致性
     /// </summary>
-    [DisplayName("MIF Exporter V16")]
-    public class MifExporterV16 : Indicator
+    [DisplayName("MIF Exporter V17")]
+    public class MifExporterV17 : Indicator
     {
         #region 配置参数
         
@@ -157,12 +163,27 @@ namespace MIF.AtasIndicator
         private int _dimensionErrors = 0;
         private List<string> _recordBuffer = new();
         private HashSet<int> _processedBarIndices = new(); // V14: 改用bar索引
+
+        // === DOM 细分统计 ===
+        private int _domLevelsCount = 0;
+        private int _domCumulativeCount = 0;
+        private int _domUnavailableCount = 0;
+
+        // === Cluster 统计 ===
+        private int _clusterSuccessCount = 0;
+        private int _clusterZeroCount = 0;
+        private long _clusterEffectiveLevelsSum = 0;
+
+        // === DOM 活性自检 ===
+        private double[]? _lastAskVolumes = null;
+        private int _domStaleCount = 0;
+        private const int DOM_STALE_THRESHOLD = 5;
         
         #endregion
         
-        public MifExporterV16()
+        public MifExporterV17()
         {
-            Name = "MIF Exporter V16";
+            Name = "MIF Exporter V17";
             
             try
             {
@@ -186,7 +207,7 @@ namespace MIF.AtasIndicator
                     
                     File.AppendAllText(_alivePath,
                         $"\n{new string('=', 80)}\n" +
-                        $"[V16-START] {DateTime.UtcNow:o}\n" +
+                        $"[V17-START] {DateTime.UtcNow:o}\n" +
                         $"DLL: {asm}\n" +
                         $"Version: {version}\n" +
                         $"Modified: {File.GetLastWriteTime(asm):o}\n" +
@@ -265,18 +286,56 @@ namespace MIF.AtasIndicator
             double close = (double)candle.Close;
             double volume = (double)candle.Volume;
             
-            // === 获取DOM ===
+            // === 获取DOM（强制每 bar 新快照）===
             DomSnapshotData? domSnapshot = null;
             try
             {
+                // 强制每次调用获取新快照，不缓存
                 domSnapshot = CaptureDomSnapshot(bar, candle);
-                
+
                 if (domSnapshot != null && domSnapshot.IsValid)
                 {
                     _domSuccessCount++;
-                    
-                    if (domSnapshot.BestAskVolume < _minDomVolume || 
-                        domSnapshot.BestBidVolume < _minDomVolume)
+
+                    // === DOM 活性自检：检测连续相同数据 ===
+                    if (_lastAskVolumes != null &&
+                        domSnapshot.AllAskVolumes.Length == _lastAskVolumes.Length &&
+                        domSnapshot.AllAskVolumes.SequenceEqual(_lastAskVolumes))
+                    {
+                        _domStaleCount++;
+
+                        // 连续多次完全相同 → 降级为 unavailable
+                        if (_domStaleCount >= DOM_STALE_THRESHOLD)
+                        {
+                            if ((bar & 63) == 0)
+                            {
+                                File.AppendAllText(_alivePath!,
+                                    $"{DateTime.UtcNow:o} DOM-STALE bar={bar}: Same data for {_domStaleCount} consecutive bars, degrading to unavailable\n");
+                            }
+                            domSnapshot = null; // 标记为无效
+                            _domUnavailableCount++;
+                        }
+                    }
+                    else
+                    {
+                        _domStaleCount = 0; // 重置计数器
+                    }
+
+                    // 深拷贝当前 DOM 用于下次对比
+                    if (domSnapshot != null)
+                    {
+                        _lastAskVolumes = (double[])domSnapshot.AllAskVolumes.Clone();
+
+                        // 按数据源统计
+                        if (domSnapshot.DataSource == "dom_levels")
+                            _domLevelsCount++;
+                        else if (domSnapshot.DataSource == "dom_cumulative")
+                            _domCumulativeCount++;
+                    }
+
+                    if (domSnapshot != null &&
+                        (domSnapshot.BestAskVolume < _minDomVolume ||
+                         domSnapshot.BestBidVolume < _minDomVolume))
                     {
                         _skippedRecords++;
                         return;
@@ -285,14 +344,20 @@ namespace MIF.AtasIndicator
                 else
                 {
                     _domFailCount++;
+                    _domUnavailableCount++;
+                    _domStaleCount = 0; // 重置
+                    _lastAskVolumes = null;
                 }
             }
             catch (Exception ex)
             {
                 _domFailCount++;
+                _domUnavailableCount++;
+                _domStaleCount = 0;
+                _lastAskVolumes = null;
                 if ((bar & 63) == 0)
                 {
-                    File.AppendAllText(_alivePath!, 
+                    File.AppendAllText(_alivePath!,
                         $"{DateTime.UtcNow:o} DOM-ERROR bar={bar}: {ex.Message}\n");
                 }
             }
@@ -397,7 +462,8 @@ namespace MIF.AtasIndicator
 
                 uBuy = realizedBuy / potBuy;
                 uSell = realizedSell / potSell;
-                ratio = Math.Min(1000.0, Math.Max(uBuy, uSell));
+                // 修复：ratio = u_buy / u_sell (买卖比)
+                ratio = uSell > 0 ? Math.Min(1000.0, uBuy / uSell) : (uBuy > 0 ? 1000.0 : 0.0);
                 dataSource = domSnapshot.DataSource;
             }
             
@@ -405,6 +471,17 @@ namespace MIF.AtasIndicator
 
             // === Cluster 结构快照（与 DOM/epsilon 解耦）===
             var cluster = CaptureClusterLevels(bar);
+
+            // === Cluster 统计 ===
+            if (cluster.IsValid && cluster.N > 0)
+            {
+                _clusterSuccessCount++;
+                _clusterEffectiveLevelsSum += cluster.N;
+            }
+            else if (ExportCluster)
+            {
+                _clusterZeroCount++;
+            }
 
             // === JSON输出 ===
             var rec = new
@@ -415,8 +492,8 @@ namespace MIF.AtasIndicator
                     timeframe = "1m",
                     t_open = tOpen.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
                     t_close = tClose.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
-                    version = "mif.v16.0",
-                    exporter = "MIF.AtasIndicator.V16",
+                    version = "mif.v17.0",
+                    exporter = "MIF.AtasIndicator.V17",
                     fixed_dimension = true,
                     dimension_size = _maxLevels
                 },
@@ -542,11 +619,12 @@ namespace MIF.AtasIndicator
                     {
                         var sortedAsks = asks.OrderBy(x => x.price).Take(_maxLevels).ToList();
                         var sortedBids = bids.OrderByDescending(x => x.price).Take(_maxLevels).ToList();
-                        
+
                         var bestAsk = sortedAsks.First();
                         var bestBid = sortedBids.First();
-                        
-                        // === 固定大小数组，zero-padding ===
+
+                        // === 固定大小数组，zero-padding（强制深拷贝，每次新分配）===
+                        // 每次都创建全新数组实例，避免共享引用
                         double[] askPrices = new double[_maxLevels];
                         double[] askVolumes = new double[_maxLevels];
                         double[] bidPrices = new double[_maxLevels];
@@ -630,12 +708,26 @@ namespace MIF.AtasIndicator
         private void LogHeartbeat()
         {
             if (_alivePath == null) return;
-            
+
             var uptime = DateTime.UtcNow - _sessionStart;
-            var domSuccessRate = _domSuccessCount + _domFailCount > 0 
+            var domSuccessRate = _domSuccessCount + _domFailCount > 0
                 ? _domSuccessCount * 100.0 / (_domSuccessCount + _domFailCount)
                 : 0;
-            
+
+            // DOM 细分统计
+            var domLevelsRate = _domSuccessCount > 0 ? _domLevelsCount * 100.0 / _domSuccessCount : 0;
+            var domCumulativeRate = _domSuccessCount > 0 ? _domCumulativeCount * 100.0 / _domSuccessCount : 0;
+            var domUnavailableRate = (_domSuccessCount + _domFailCount) > 0
+                ? _domUnavailableCount * 100.0 / (_domSuccessCount + _domFailCount)
+                : 0;
+
+            // Cluster 统计
+            var clusterTotal = _clusterSuccessCount + _clusterZeroCount;
+            var clusterSuccessRate = clusterTotal > 0 ? _clusterSuccessCount * 100.0 / clusterTotal : 0;
+            var clusterAvgEffective = _clusterSuccessCount > 0
+                ? (double)_clusterEffectiveLevelsSum / _clusterSuccessCount
+                : 0;
+
             File.AppendAllText(_alivePath,
                 $"[HEARTBEAT] {DateTime.UtcNow:o}\n" +
                 $"  Uptime: {uptime.TotalMinutes:F1}m\n" +
@@ -644,6 +736,12 @@ namespace MIF.AtasIndicator
                 $"  Skipped: {_skippedRecords}\n" +
                 $"  Duplicates: {_duplicateRecords}\n" +
                 $"  DOM success: {_domSuccessCount} ({domSuccessRate:F1}%)\n" +
+                $"    ├─ DOM levels: {_domLevelsCount} ({domLevelsRate:F1}%)\n" +
+                $"    ├─ DOM cumulative: {_domCumulativeCount} ({domCumulativeRate:F1}%)\n" +
+                $"    └─ DOM unavailable: {_domUnavailableCount} ({domUnavailableRate:F1}%)\n" +
+                $"  DOM stale count: {_domStaleCount} (consecutive)\n" +
+                $"  Cluster success: {_clusterSuccessCount} / {clusterTotal} ({clusterSuccessRate:F1}%)\n" +
+                $"  Cluster avg effective levels: {clusterAvgEffective:F1}\n" +
                 $"  Dimension errors: {_dimensionErrors}\n" +
                 $"  Buffer: {_recordBuffer.Count}/{_bufferSize}\n\n");
         }
@@ -688,7 +786,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"\n[V16-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
+                        $"\n[V17-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
                 }
                 
                 int backtrackCount = 0;
@@ -711,7 +809,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"[V16-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
+                        $"[V17-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
                 }
             }
             catch (Exception ex)
@@ -728,13 +826,27 @@ namespace MIF.AtasIndicator
             if (_alivePath != null)
             {
                 var uptime = DateTime.UtcNow - _sessionStart;
-                var domSuccessRate = _domSuccessCount + _domFailCount > 0 
+                var domSuccessRate = _domSuccessCount + _domFailCount > 0
                     ? _domSuccessCount * 100.0 / (_domSuccessCount + _domFailCount)
                     : 0;
-                
+
+                // DOM 细分统计
+                var domLevelsRate = _domSuccessCount > 0 ? _domLevelsCount * 100.0 / _domSuccessCount : 0;
+                var domCumulativeRate = _domSuccessCount > 0 ? _domCumulativeCount * 100.0 / _domSuccessCount : 0;
+                var domUnavailableRate = (_domSuccessCount + _domFailCount) > 0
+                    ? _domUnavailableCount * 100.0 / (_domSuccessCount + _domFailCount)
+                    : 0;
+
+                // Cluster 统计
+                var clusterTotal = _clusterSuccessCount + _clusterZeroCount;
+                var clusterSuccessRate = clusterTotal > 0 ? _clusterSuccessCount * 100.0 / clusterTotal : 0;
+                var clusterAvgEffective = _clusterSuccessCount > 0
+                    ? (double)_clusterEffectiveLevelsSum / _clusterSuccessCount
+                    : 0;
+
                 File.AppendAllText(_alivePath,
                     $"\n{new string('=', 80)}\n" +
-                    $"[V16-END] {DateTime.UtcNow:o}\n" +
+                    $"[V17-END] {DateTime.UtcNow:o}\n" +
                     $"Session Summary:\n" +
                     $"  Duration: {uptime.TotalMinutes:F1} minutes\n" +
                     $"  Total bars processed: {_totalBars}\n" +
@@ -742,6 +854,11 @@ namespace MIF.AtasIndicator
                     $"  Records skipped: {_skippedRecords}\n" +
                     $"  Duplicate bars filtered: {_duplicateRecords}\n" +
                     $"  DOM success rate: {domSuccessRate:F1}%\n" +
+                    $"    ├─ DOM levels: {_domLevelsCount} ({domLevelsRate:F1}%)\n" +
+                    $"    ├─ DOM cumulative: {_domCumulativeCount} ({domCumulativeRate:F1}%)\n" +
+                    $"    └─ DOM unavailable: {_domUnavailableCount} ({domUnavailableRate:F1}%)\n" +
+                    $"  Cluster success: {_clusterSuccessCount}/{clusterTotal} ({clusterSuccessRate:F1}%)\n" +
+                    $"  Cluster avg effective levels: {clusterAvgEffective:F1}\n" +
                     $"  Dimension errors: {_dimensionErrors}\n" +
                     $"  FIXED DIMENSION: {_maxLevels} levels\n" +
                     $"  OHLCV: Included\n" +
