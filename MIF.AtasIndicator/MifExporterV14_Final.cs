@@ -97,8 +97,8 @@ namespace MIF.AtasIndicator
         }
         
         private bool _skipZeroTrades = true;
-        
-        [Display(Name = "Skip Zero Trades", 
+
+        [Display(Name = "Skip Zero Trades",
                  GroupName = "Data Quality",
                  Description = "Skip bars with no realized trades")]
         public bool SkipZeroTrades
@@ -106,7 +106,41 @@ namespace MIF.AtasIndicator
             get => _skipZeroTrades;
             set => _skipZeroTrades = value;
         }
-        
+
+        // === Cluster export and DOM/Cluster decoupling ===
+        private bool _exportDom = true;
+
+        [Display(Name = "Export DOM → epsilon",
+                 GroupName = "Export Settings",
+                 Description = "Export DOM depth as epsilon")]
+        public bool ExportDom
+        {
+            get => _exportDom;
+            set => _exportDom = value;
+        }
+
+        private bool _exportCluster = true;
+
+        [Display(Name = "Export Cluster → cluster",
+                 GroupName = "Export Settings",
+                 Description = "Export price-level cluster snapshot (labels only)")]
+        public bool ExportCluster
+        {
+            get => _exportCluster;
+            set => _exportCluster = value;
+        }
+
+        private bool _includeClusterPrices = true;
+
+        [Display(Name = "Include Cluster Prices (labels)",
+                 GroupName = "Export Settings",
+                 Description = "Prices as labels only, not used in ε")]
+        public bool IncludeClusterPrices
+        {
+            get => _includeClusterPrices;
+            set => _includeClusterPrices = value;
+        }
+
         #endregion
         
         #region 内部状态
@@ -162,7 +196,9 @@ namespace MIF.AtasIndicator
                         $"Completeness: Full backtrack on dispose\n" +
                         $"Compress output: {_compressOutput}\n" +
                         $"UTC timezone: ENFORCED\n" +
-                        $"Data source: DOM (fallback to Cluster)\n" +
+                        $"Data source: DOM→epsilon; Cluster→cluster (decoupled)\n" +
+                        $"Export DOM: {(_exportDom ? "YES" : "NO")}\n" +
+                        $"Export Cluster: {(_exportCluster ? "YES" : "NO")}\n" +
                         $"Buffer size: {_bufferSize}\n" +
                         $"{new string('=', 80)}\n\n");
                 }
@@ -261,15 +297,15 @@ namespace MIF.AtasIndicator
                 }
             }
             
-            // === Epsilon构建：强制固定维度 ===
-            double[] ask;
-            double[] bid;
-            double[] askPrices;
-            double[] bidPrices;
-            string epsilonSource;
+            // === Epsilon构建：强制固定维度（仅来自DOM）===
+            double[] ask = Array.Empty<double>();
+            double[] bid = Array.Empty<double>();
+            double[] askPrices = Array.Empty<double>();
+            double[] bidPrices = Array.Empty<double>();
+            string epsilonSource = "unavailable";
             int effectiveLevels = 0;
-            
-            if (domSnapshot != null && domSnapshot.IsValid && domSnapshot.ExtractedLevels >= 1)
+
+            if (ExportDom && domSnapshot != null && domSnapshot.IsValid && domSnapshot.ExtractedLevels >= 1)
             {
                 // 使用DOM数据
                 ask = domSnapshot.AllAskVolumes;
@@ -277,8 +313,8 @@ namespace MIF.AtasIndicator
                 askPrices = domSnapshot.AllAskPrices;
                 bidPrices = domSnapshot.AllBidPrices;
                 effectiveLevels = domSnapshot.ExtractedLevels;
-                epsilonSource = "dom";
-                
+                epsilonSource = "dom_levels";
+
                 // 维度验证
                 if (ask.Length != _maxLevels || bid.Length != _maxLevels)
                 {
@@ -287,37 +323,7 @@ namespace MIF.AtasIndicator
                     return;
                 }
             }
-            else
-            {
-                // Fallback到Cluster
-                var allLevels = candle.GetAllPriceLevels();
-                if (allLevels == null) return;
-                
-                var levelsList = allLevels.ToList();
-                int clusterLevels = levelsList.Count;
-                if (clusterLevels == 0) return;
-                
-                // 创建固定维度数组
-                ask = new double[_maxLevels];
-                bid = new double[_maxLevels];
-                askPrices = new double[_maxLevels];
-                bidPrices = new double[_maxLevels];
-                
-                // 填充cluster数据
-                int copyCount = Math.Min(clusterLevels, _maxLevels);
-                for (int i = 0; i < copyCount; i++)
-                {
-                    var level = levelsList[i];
-                    if (level != null)
-                    {
-                        ask[i] = (double)level.Ask;
-                        bid[i] = (double)level.Bid;
-                    }
-                }
-                
-                effectiveLevels = copyCount;
-                epsilonSource = "cluster_fallback";
-            }
+            // Note: When DOM is unavailable, epsilon remains "unavailable"; no cluster_fallback
             
             // === Realized volume ===
             double realizedBuy = 0.0;
@@ -344,7 +350,7 @@ namespace MIF.AtasIndicator
             }
             
             // === 压缩优化（可选）===
-            if (_compressOutput && epsilonSource == "dom")
+            if (_compressOutput && epsilonSource == "dom_levels")
             {
                 var nonZeroIndices = new List<int>();
                 for (int i = 0; i < _maxLevels; i++)
@@ -354,16 +360,16 @@ namespace MIF.AtasIndicator
                         nonZeroIndices.Add(i);
                     }
                 }
-                
+
                 int nonZeroCount = nonZeroIndices.Count;
-                
+
                 if (nonZeroCount < _maxLevels * 0.7)
                 {
                     var compressedAsk = new double[_maxLevels];
                     var compressedBid = new double[_maxLevels];
                     var compressedAskPrices = new double[_maxLevels];
                     var compressedBidPrices = new double[_maxLevels];
-                    
+
                     for (int i = 0; i < nonZeroCount; i++)
                     {
                         int idx = nonZeroIndices[i];
@@ -372,7 +378,7 @@ namespace MIF.AtasIndicator
                         compressedAskPrices[i] = askPrices[idx];
                         compressedBidPrices[i] = bidPrices[idx];
                     }
-                    
+
                     ask = compressedAsk;
                     bid = compressedBid;
                     askPrices = compressedAskPrices;
@@ -381,47 +387,25 @@ namespace MIF.AtasIndicator
             }
             
             // === Urgency计算 ===
-            double uBuy, uSell, ratio;
-            string dataSource;
-            
+            double uBuy = 0.0, uSell = 0.0, ratio = 0.0;
+            string dataSource = "unavailable";
+
             if (domSnapshot != null && domSnapshot.IsValid)
             {
                 double potBuy = Math.Max(domSnapshot.BestAskVolume, 1e-12);
                 double potSell = Math.Max(domSnapshot.BestBidVolume, 1e-12);
-                
+
                 uBuy = realizedBuy / potBuy;
                 uSell = realizedSell / potSell;
                 ratio = Math.Min(1000.0, Math.Max(uBuy, uSell));
                 dataSource = domSnapshot.DataSource;
             }
-            else
-            {
-                int bestAskIdx = 0;
-                int bestBidIdx = 0;
-                
-                if (epsilonSource == "cluster_fallback")
-                {
-                    for (int i = 0; i < _maxLevels; i++)
-                    {
-                        if (ask[i] > 0) { bestAskIdx = i; break; }
-                    }
-                    for (int i = _maxLevels - 1; i >= 0; i--)
-                    {
-                        if (bid[i] > 0) { bestBidIdx = i; break; }
-                    }
-                }
-                
-                double potBuy = Math.Max(ask[bestAskIdx], 1e-12);
-                double potSell = Math.Max(bid[bestBidIdx], 1e-12);
-                
-                uBuy = realizedBuy / potBuy;
-                uSell = realizedSell / potSell;
-                ratio = Math.Min(1000.0, Math.Max(uBuy, uSell));
-                dataSource = "cluster_fallback";
-            }
             
             var tClose = tOpen.AddMinutes(1);
-            
+
+            // === Cluster 结构快照（与 DOM/epsilon 解耦）===
+            var cluster = CaptureClusterLevels(bar);
+
             // === JSON输出 ===
             var rec = new
             {
@@ -453,6 +437,18 @@ namespace MIF.AtasIndicator
                     ask_vol = ask,
                     bid_vol = bid
                 },
+                cluster = ExportCluster && cluster.IsValid
+                    ? new
+                    {
+                        source = cluster.Source,
+                        dimension = _maxLevels,
+                        effective_levels = cluster.N,
+                        ask_vol = cluster.Ask,
+                        bid_vol = cluster.Bid,
+                        prices = _includeClusterPrices ? cluster.Prices : null, // labels only
+                        note = "prices are labels only, NOT used in epsilon"
+                    }
+                    : null,
                 trades = new
                 {
                     buy = realizedBuy,
@@ -749,6 +745,8 @@ namespace MIF.AtasIndicator
                     $"  Dimension errors: {_dimensionErrors}\n" +
                     $"  FIXED DIMENSION: {_maxLevels} levels\n" +
                     $"  OHLCV: Included\n" +
+                    $"  DOM exported: {(_exportDom ? "YES" : "NO")}\n" +
+                    $"  Cluster exported: {(_exportCluster ? "YES" : "NO")}\n" +
                     $"  Compression: {(_compressOutput ? "ON" : "OFF")}\n" +
                     $"{new string('=', 80)}\n\n");
             }
@@ -762,17 +760,58 @@ namespace MIF.AtasIndicator
             public double BestBidPrice { get; set; }
             public double BestAskVolume { get; set; }
             public double BestBidVolume { get; set; }
-            
+
             public double[] AllAskPrices { get; set; } = Array.Empty<double>();
             public double[] AllAskVolumes { get; set; } = Array.Empty<double>();
             public double[] AllBidPrices { get; set; } = Array.Empty<double>();
             public double[] AllBidVolumes { get; set; } = Array.Empty<double>();
-            
+
             public int TotalAskLevels { get; set; }
             public int TotalBidLevels { get; set; }
             public int ExtractedLevels { get; set; }
             public string DataSource { get; set; } = "";
             public bool IsValid { get; set; }
+        }
+
+        private class ClusterSnapshot
+        {
+            public bool IsValid { get; set; }
+            public int N { get; set; }
+            public double[] Prices { get; set; } = Array.Empty<double>(); // labels only
+            public double[] Ask { get; set; } = Array.Empty<double>();
+            public double[] Bid { get; set; } = Array.Empty<double>();
+            public string Source => "cluster_levels";
+        }
+
+        // Fixed dimension zero-padding (aligned to _maxLevels)
+        private ClusterSnapshot CaptureClusterLevels(int bar)
+        {
+            var snap = new ClusterSnapshot { IsValid = false, N = 0 };
+
+            if (!ExportCluster) return snap;
+
+            if (AtasBindings.TryGetLevels(this, bar, out var lvls) && lvls.Length > 0)
+            {
+                int copy = Math.Min(lvls.Length, _maxLevels);
+
+                var ask = new double[_maxLevels];
+                var bid = new double[_maxLevels];
+                var prices = new double[_maxLevels];
+
+                for (int i = 0; i < copy; i++)
+                {
+                    ask[i] = lvls[i].Ask;
+                    bid[i] = lvls[i].Bid;
+                    prices[i] = lvls[i].Price ?? 0.0; // label only
+                }
+
+                snap.IsValid = true;
+                snap.N = copy;
+                snap.Ask = ask;
+                snap.Bid = bid;
+                snap.Prices = prices;
+            }
+            return snap;
         }
     }
 }
