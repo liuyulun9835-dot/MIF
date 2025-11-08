@@ -12,21 +12,21 @@ using System.ComponentModel.DataAnnotations;
 namespace MIF.AtasIndicator
 {
     /// <summary>
-    /// MIF ATAS导出器 V14 - 完整性与OHLCV版
-    /// 
-    /// V14关键修复：
-    /// 1. 完整性保证 - OnDispose时回溯处理所有历史bars（0到CurrentBar-1）
-    /// 2. OHLCV数据 - 添加完整的1分钟K线数据（Open/High/Low/Close/Volume）
-    /// 3. 优化去重 - 使用bar索引而非时间戳，避免时区/精度问题
-    /// 4. 保留V13的所有API调用模式和固定维度特性
-    /// 
-    /// 解决的问题：
-    /// - 1440条bar中丢失40条的问题（现在保证完整回溯）
-    /// - 缺失OHLCV基础数据的问题（添加ohlcv字段）
-    /// - 重复判断的时间戳精度问题（改用bar索引）
+    /// MIF ATAS导出器 V16 - DOM/Cluster解耦版
+    ///
+    /// V16关键更新：
+    /// 1. DOM/Cluster完全解耦 - epsilon仅来自DOM，cluster独立导出
+    /// 2. 新增导出开关 - ExportDom, ExportCluster, IncludeClusterPrices
+    /// 3. 消除cluster_fallback - DOM不可用时epsilon标记为"unavailable"
+    /// 4. Cluster价格仅作标签 - 不参与ε计算，仅供参考
+    ///
+    /// V14基础特性（保留）：
+    /// - 完整性保证 - OnDispose时回溯处理所有历史bars
+    /// - OHLCV数据 - 完整的1分钟K线数据
+    /// - 固定维度 - 保证数据维度一致性
     /// </summary>
-    [DisplayName("MIF Exporter V14")]
-    public class MifExporterV14 : Indicator
+    [DisplayName("MIF Exporter V16")]
+    public class MifExporterV16 : Indicator
     {
         #region 配置参数
         
@@ -160,9 +160,9 @@ namespace MIF.AtasIndicator
         
         #endregion
         
-        public MifExporterV14()
+        public MifExporterV16()
         {
-            Name = "MIF Exporter V14";
+            Name = "MIF Exporter V16";
             
             try
             {
@@ -186,7 +186,7 @@ namespace MIF.AtasIndicator
                     
                     File.AppendAllText(_alivePath,
                         $"\n{new string('=', 80)}\n" +
-                        $"[V14-START] {DateTime.UtcNow:o}\n" +
+                        $"[V16-START] {DateTime.UtcNow:o}\n" +
                         $"DLL: {asm}\n" +
                         $"Version: {version}\n" +
                         $"Modified: {File.GetLastWriteTime(asm):o}\n" +
@@ -415,8 +415,8 @@ namespace MIF.AtasIndicator
                     timeframe = "1m",
                     t_open = tOpen.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
                     t_close = tClose.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ"),
-                    version = "mif.v14.0",
-                    exporter = "MIF.AtasIndicator.V14",
+                    version = "mif.v16.0",
+                    exporter = "MIF.AtasIndicator.V16",
                     fixed_dimension = true,
                     dimension_size = _maxLevels
                 },
@@ -688,7 +688,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"\n[V14-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
+                        $"\n[V16-BACKTRACK] Starting full history scan from bar 0 to {CurrentBar - 1}...\n");
                 }
                 
                 int backtrackCount = 0;
@@ -711,7 +711,7 @@ namespace MIF.AtasIndicator
                 if (_alivePath != null)
                 {
                     File.AppendAllText(_alivePath,
-                        $"[V14-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
+                        $"[V16-BACKTRACK] Completed. Recovered {backtrackCount} missing bars.\n\n");
                 }
             }
             catch (Exception ex)
@@ -734,7 +734,7 @@ namespace MIF.AtasIndicator
                 
                 File.AppendAllText(_alivePath,
                     $"\n{new string('=', 80)}\n" +
-                    $"[V14-END] {DateTime.UtcNow:o}\n" +
+                    $"[V16-END] {DateTime.UtcNow:o}\n" +
                     $"Session Summary:\n" +
                     $"  Duration: {uptime.TotalMinutes:F1} minutes\n" +
                     $"  Total bars processed: {_totalBars}\n" +
