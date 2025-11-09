@@ -34,6 +34,7 @@ namespace MIF.AtasIndicator
         private static readonly string[] TimeFrameTextPropertyNames = { "TimeFrameText", "Text", "Name" };
 
         private readonly Dictionary<int, BarData> _barCache = new();
+        private readonly HashSet<int> _exportedBars = new();
         private JSONLExporter? _exporter;
         private string? _resolvedTimeframe;
         private string? _resolvedSymbol;
@@ -122,7 +123,7 @@ namespace MIF.AtasIndicator
 
             if (ShouldExportBar(bar, candle))
             {
-                if (barData.IsComplete())
+                if (barData.IsComplete() && _exportedBars.Add(bar))
                 {
                     EnsureExporter();
                     _exporter?.ExportBar(barData);
@@ -141,9 +142,11 @@ namespace MIF.AtasIndicator
                     if (bar.IsComplete())
                     {
                         _exporter?.ExportBar(bar);
+                        _exportedBars.Add(bar.BarIndex);
                     }
                 }
                 _barCache.Clear();
+                _exportedBars.Clear();
             }
             finally
             {
@@ -310,9 +313,21 @@ namespace MIF.AtasIndicator
 
         private bool ShouldExportBar(int bar, IndicatorCandle candle)
         {
-            if (bar >= CurrentBar - 1)
+            if (_exportedBars.Contains(bar))
             {
                 return false;
+            }
+
+            if (bar < CurrentBar - 1)
+            {
+                return true;
+            }
+
+            var closeTime = EnsureUtc(candle.Time);
+
+            if (bar < CurrentBar)
+            {
+                return true;
             }
 
             if (candle.Time.Kind == DateTimeKind.Unspecified)
@@ -320,9 +335,7 @@ namespace MIF.AtasIndicator
                 return true;
             }
 
-            var now = DateTime.UtcNow;
-            var closeTime = EnsureUtc(candle.Time);
-            return now - closeTime > TimeSpan.FromSeconds(5);
+            return DateTime.UtcNow - closeTime > TimeSpan.FromSeconds(5);
         }
 
         private void EnsureExporter()
