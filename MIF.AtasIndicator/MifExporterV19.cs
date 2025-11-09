@@ -39,6 +39,10 @@ namespace MIF.AtasIndicator
         private string? _resolvedTimeframe;
         private string? _resolvedSymbol;
         private string? _exportFilePath;
+        private string? _resolvedOutputDirectory;
+        private string? _alivePath;
+        private readonly Dictionary<int, string> _lastGateReasons = new();
+        private bool _startLogged;
 
         public MifExporterV19()
         {
@@ -72,11 +76,17 @@ namespace MIF.AtasIndicator
                 return;
             }
 
+            if (!_startLogged)
+            {
+                LogAlive($"indicator-start version={Version}");
+                _startLogged = true;
+            }
+
             var barData = GetOrCreateBarData(bar);
 
             if (ExportDom)
             {
-                var dom = ExtractDomData(candle);
+                var dom = ExtractDomData(bar, candle);
                 if (dom is not null)
                 {
                     barData.DOM = dom;
@@ -86,7 +96,7 @@ namespace MIF.AtasIndicator
 
             if (ExportCluster)
             {
-                var cluster = ExtractClusterData(candle);
+                var cluster = ExtractClusterData(bar, candle);
                 if (cluster is not null)
                 {
                     if (barData.MasterTimestamp.HasValue)
@@ -97,7 +107,10 @@ namespace MIF.AtasIndicator
                         }
                         else
                         {
-                            ReportWarning($"Cluster timestamp mismatch at bar {bar}: DOM={barData.MasterTimestamp:o}, Cluster={cluster.Timestamp:o}");
+                            var domTimestamp = barData.MasterTimestamp.HasValue
+                                ? barData.MasterTimestamp.Value.ToString("o")
+                                : "null";
+                            ReportWarning($"Cluster timestamp mismatch at bar {bar}: DOM={domTimestamp}, Cluster={cluster.Timestamp:o}");
                         }
                     }
                     else
@@ -121,13 +134,35 @@ namespace MIF.AtasIndicator
                 barData.MasterTimestamp = EnsureUtc(candle.Time);
             }
 
-            if (ShouldExportBar(bar, candle))
+            if (ShouldExportBar(bar, candle, out var gateReason))
             {
                 if (barData.IsComplete() && _exportedBars.Add(bar))
                 {
                     EnsureExporter();
-                    _exporter?.ExportBar(barData);
+                    try
+                    {
+                        _exporter?.ExportBar(barData);
+                        LogAlive($"exported bar={bar} ts={barData.MasterTimestamp:O} dom={(barData.DOM != null ? 1 : 0)} cluster={(barData.Cluster != null ? 1 : 0)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogAlive($"export-failed bar={bar} error={ex.Message}");
+                        throw;
+                    }
+                    _lastGateReasons.Remove(bar);
                     _barCache.Remove(bar);
+                }
+                else if (!barData.IsComplete())
+                {
+                    LogAlive($"skip-incomplete bar={bar} reason={gateReason ?? "none"} hasDom={(barData.DOM != null ? 1 : 0)} hasCluster={(barData.Cluster != null ? 1 : 0)} hasOhlc={(barData.OHLC != null ? 1 : 0)} ts={(barData.MasterTimestamp.HasValue ? barData.MasterTimestamp.Value.ToString("o") : "null")}");
+                }
+            }
+            else if (!string.IsNullOrEmpty(gateReason))
+            {
+                if (!_lastGateReasons.TryGetValue(bar, out var existing) || !string.Equals(existing, gateReason, StringComparison.Ordinal))
+                {
+                    _lastGateReasons[bar] = gateReason;
+                    LogAlive($"gate-skip bar={bar} reason={gateReason}");
                 }
             }
         }
@@ -141,17 +176,27 @@ namespace MIF.AtasIndicator
                 {
                     if (bar.IsComplete())
                     {
-                        _exporter?.ExportBar(bar);
+                        try
+                        {
+                            _exporter?.ExportBar(bar);
+                            LogAlive($"disposed-export bar={bar.BarIndex} ts={bar.MasterTimestamp:O}");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogAlive($"dispose-export-failed bar={bar.BarIndex} error={ex.Message}");
+                        }
                         _exportedBars.Add(bar.BarIndex);
                     }
                 }
                 _barCache.Clear();
                 _exportedBars.Clear();
+                _lastGateReasons.Clear();
             }
             finally
             {
                 _exporter?.Dispose();
                 _exporter = null;
+                LogAlive("indicator-disposed");
                 base.OnDispose();
             }
         }
@@ -171,7 +216,7 @@ namespace MIF.AtasIndicator
             return barData;
         }
 
-        private DOMData? ExtractDomData(IndicatorCandle candle)
+        private DOMData? ExtractDomData(int bar, IndicatorCandle candle)
         {
             var timestamp = EnsureUtc(candle.Time);
             var domData = new DOMData
@@ -191,6 +236,36 @@ namespace MIF.AtasIndicator
             if (levels.Count > 0)
             {
                 levels.Sort(CompareSnapshotsByPrice);
+            }
+            else if (AtasBindings.TryGetLevels(this, bar, out var fallbackLevels) && fallbackLevels.Length > 0)
+            {
+                foreach (var level in fallbackLevels)
+                {
+                    levels.Add(new PriceLevelSnapshot
+                    {
+                        Ask = Convert.ToDecimal(level.Ask, CultureInfo.InvariantCulture),
+                        Bid = Convert.ToDecimal(level.Bid, CultureInfo.InvariantCulture),
+                        Price = level.Price.HasValue ? Convert.ToDecimal(level.Price.Value, CultureInfo.InvariantCulture) : null,
+                        Volume = Convert.ToDecimal(level.Ask + level.Bid, CultureInfo.InvariantCulture),
+                        Delta = Convert.ToDecimal(level.Ask - level.Bid, CultureInfo.InvariantCulture),
+                        Trades = 0
+                    });
+                    if (levels.Count >= FixedLevels)
+                    {
+                        break;
+                    }
+                }
+
+                if (levels.Count > 0)
+                {
+                    levels.Sort(CompareSnapshotsByPrice);
+                    LogAlive($"dom-fallback bar={bar} levels={levels.Count}");
+                }
+            }
+
+            if (levels.Count == 0)
+            {
+                LogAlive($"dom-missing bar={bar}");
             }
 
             for (var i = 0; i < FixedLevels; i++)
@@ -234,7 +309,7 @@ namespace MIF.AtasIndicator
             return domData;
         }
 
-        private ClusterData? ExtractClusterData(IndicatorCandle candle)
+        private ClusterData? ExtractClusterData(int bar, IndicatorCandle candle)
         {
             var timestamp = EnsureUtc(candle.Time);
             var clusterData = new ClusterData
@@ -255,6 +330,36 @@ namespace MIF.AtasIndicator
             if (levels.Count > 0)
             {
                 levels.Sort(CompareSnapshotsByPrice);
+            }
+            else if (AtasBindings.TryGetClusterLevels(this, bar, out var fallbackLevels) && fallbackLevels.Length > 0)
+            {
+                foreach (var level in fallbackLevels)
+                {
+                    levels.Add(new PriceLevelSnapshot
+                    {
+                        Ask = Convert.ToDecimal(level.Ask, CultureInfo.InvariantCulture),
+                        Bid = Convert.ToDecimal(level.Bid, CultureInfo.InvariantCulture),
+                        Price = level.Price.HasValue ? Convert.ToDecimal(level.Price.Value, CultureInfo.InvariantCulture) : null,
+                        Volume = Convert.ToDecimal(level.Ask + level.Bid, CultureInfo.InvariantCulture),
+                        Delta = Convert.ToDecimal(level.Ask - level.Bid, CultureInfo.InvariantCulture),
+                        Trades = 0
+                    });
+                    if (levels.Count >= FixedLevels)
+                    {
+                        break;
+                    }
+                }
+
+                if (levels.Count > 0)
+                {
+                    levels.Sort(CompareSnapshotsByPrice);
+                    LogAlive($"cluster-fallback bar={bar} levels={levels.Count}");
+                }
+            }
+
+            if (levels.Count == 0)
+            {
+                LogAlive($"cluster-missing bar={bar}");
             }
 
             decimal maxSingleTrade = 0m;
@@ -311,15 +416,18 @@ namespace MIF.AtasIndicator
             return clusterData;
         }
 
-        private bool ShouldExportBar(int bar, IndicatorCandle candle)
+        private bool ShouldExportBar(int bar, IndicatorCandle candle, out string? reason)
         {
+            reason = null;
             if (_exportedBars.Contains(bar))
             {
+                reason = "already-exported";
                 return false;
             }
 
             if (bar < CurrentBar - 1)
             {
+                reason = "historical";
                 return true;
             }
 
@@ -327,15 +435,25 @@ namespace MIF.AtasIndicator
 
             if (bar < CurrentBar)
             {
+                reason = "closed";
                 return true;
             }
 
             if (candle.Time.Kind == DateTimeKind.Unspecified)
             {
+                reason = "unspecified-kind";
                 return true;
             }
 
-            return DateTime.UtcNow - closeTime > TimeSpan.FromSeconds(5);
+            var age = DateTime.UtcNow - closeTime;
+            if (age > TimeSpan.FromSeconds(5))
+            {
+                reason = $"aged-{age.TotalSeconds:F0}s";
+                return true;
+            }
+
+            reason = $"waiting-active ({age.TotalSeconds:F1}s)";
+            return false;
         }
 
         private void EnsureExporter()
@@ -352,20 +470,28 @@ namespace MIF.AtasIndicator
             var fileName = $"{SanitizeFileName(_resolvedSymbol ?? "instrument")}_{SanitizeFileName(_resolvedTimeframe ?? "1m")}_{Version}.jsonl";
             _exportFilePath = Path.Combine(directory, fileName);
             _exporter = new JSONLExporter(_exportFilePath, _resolvedTimeframe ?? "1m");
+            LogAlive($"exporter-created path={_exportFilePath}");
         }
 
         private string GetOutputDirectory()
         {
+            if (_resolvedOutputDirectory is not null)
+            {
+                return _resolvedOutputDirectory;
+            }
+
             if (!string.IsNullOrWhiteSpace(OutputDirectory))
             {
                 Directory.CreateDirectory(OutputDirectory);
-                return OutputDirectory;
+                _resolvedOutputDirectory = OutputDirectory;
+                return _resolvedOutputDirectory;
             }
 
             var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             var defaultPath = Path.Combine(documents, "MIF", "atas_export");
             Directory.CreateDirectory(defaultPath);
-            return defaultPath;
+            _resolvedOutputDirectory = defaultPath;
+            return _resolvedOutputDirectory;
         }
 
         private string ResolveSymbol()
@@ -707,6 +833,7 @@ namespace MIF.AtasIndicator
                 if (method is not null)
                 {
                     method.Invoke(this, new object?[] { message });
+                    LogAlive(message);
                     return;
                 }
             }
@@ -716,6 +843,54 @@ namespace MIF.AtasIndicator
             }
 
             Debug.WriteLine(message);
+            LogAlive(message);
+        }
+
+        private void EnsureAliveFile()
+        {
+            if (_alivePath is not null)
+            {
+                return;
+            }
+
+            var directory = GetOutputDirectory();
+            Directory.CreateDirectory(directory);
+            _alivePath = Path.Combine(directory, "_alive.log");
+            if (!File.Exists(_alivePath))
+            {
+                try
+                {
+                    using var _ = File.AppendText(_alivePath);
+                }
+                catch
+                {
+                    _alivePath = null;
+                }
+            }
+        }
+
+        private void LogAlive(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            try
+            {
+                EnsureAliveFile();
+                if (_alivePath is null)
+                {
+                    return;
+                }
+
+                var line = $"{DateTime.UtcNow:o} {message}{Environment.NewLine}";
+                File.AppendAllText(_alivePath, line);
+            }
+            catch
+            {
+                // ignore logging failures
+            }
         }
     }
 }

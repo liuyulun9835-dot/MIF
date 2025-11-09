@@ -33,7 +33,7 @@ namespace MIF.AtasIndicator.Exporters
 
             _options = new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                PropertyNamingPolicy = null,
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
         }
