@@ -134,37 +134,7 @@ namespace MIF.AtasIndicator
                 barData.MasterTimestamp = EnsureUtc(candle.Time);
             }
 
-            if (ShouldExportBar(bar, candle, out var gateReason))
-            {
-                if (barData.IsComplete() && _exportedBars.Add(bar))
-                {
-                    EnsureExporter();
-                    try
-                    {
-                        _exporter?.ExportBar(barData);
-                        LogAlive($"exported bar={bar} ts={barData.MasterTimestamp:O} dom={(barData.DOM != null ? 1 : 0)} cluster={(barData.Cluster != null ? 1 : 0)}");
-                    }
-                    catch (Exception ex)
-                    {
-                        LogAlive($"export-failed bar={bar} error={ex.Message}");
-                        throw;
-                    }
-                    _lastGateReasons.Remove(bar);
-                    _barCache.Remove(bar);
-                }
-                else if (!barData.IsComplete())
-                {
-                    LogAlive($"skip-incomplete bar={bar} reason={gateReason ?? "none"} hasDom={(barData.DOM != null ? 1 : 0)} hasCluster={(barData.Cluster != null ? 1 : 0)} hasOhlc={(barData.OHLC != null ? 1 : 0)} ts={(barData.MasterTimestamp.HasValue ? barData.MasterTimestamp.Value.ToString("o") : "null")}");
-                }
-            }
-            else if (!string.IsNullOrEmpty(gateReason))
-            {
-                if (!_lastGateReasons.TryGetValue(bar, out var existing) || !string.Equals(existing, gateReason, StringComparison.Ordinal))
-                {
-                    _lastGateReasons[bar] = gateReason;
-                    LogAlive($"gate-skip bar={bar} reason={gateReason}");
-                }
-            }
+            TryExportBar(bar, barData, candle);
         }
 
         protected override void OnDispose()
@@ -174,19 +144,7 @@ namespace MIF.AtasIndicator
                 EnsureExporter();
                 foreach (var bar in _barCache.Values.OrderBy(b => b.BarIndex).ToList())
                 {
-                    if (bar.IsComplete())
-                    {
-                        try
-                        {
-                            _exporter?.ExportBar(bar);
-                            LogAlive($"disposed-export bar={bar.BarIndex} ts={bar.MasterTimestamp:O}");
-                        }
-                        catch (Exception ex)
-                        {
-                            LogAlive($"dispose-export-failed bar={bar.BarIndex} error={ex.Message}");
-                        }
-                        _exportedBars.Add(bar.BarIndex);
-                    }
+                    TryExportBar(bar.BarIndex, bar, null, force: true);
                 }
                 _barCache.Clear();
                 _exportedBars.Clear();
@@ -227,11 +185,7 @@ namespace MIF.AtasIndicator
                 PriceLevels = new decimal[FixedLevels]
             };
 
-            var levels = GetPriceLevels(candle)
-                .Select(CreateSnapshot)
-                .Where(snapshot => snapshot is not null)
-                .Select(snapshot => snapshot!.Value)
-                .ToList();
+            var levels = CollectPriceLevelSnapshots(candle, bar, "dom");
 
             if (levels.Count > 0)
             {
@@ -321,11 +275,7 @@ namespace MIF.AtasIndicator
                 Delta = Convert.ToDecimal(candle.Delta, CultureInfo.InvariantCulture)
             };
 
-            var levels = GetPriceLevels(candle)
-                .Select(CreateSnapshot)
-                .Where(snapshot => snapshot is not null)
-                .Select(snapshot => snapshot!.Value)
-                .ToList();
+            var levels = CollectPriceLevelSnapshots(candle, bar, "cluster");
 
             if (levels.Count > 0)
             {
@@ -416,44 +366,113 @@ namespace MIF.AtasIndicator
             return clusterData;
         }
 
-        private bool ShouldExportBar(int bar, IndicatorCandle candle, out string? reason)
+        private List<PriceLevelSnapshot> CollectPriceLevelSnapshots(IndicatorCandle candle, int bar, string context)
         {
-            reason = null;
+            var snapshots = new List<PriceLevelSnapshot>(FixedLevels);
+
+            try
+            {
+                foreach (var level in GetPriceLevels(candle))
+                {
+                    var snapshot = CreateSnapshot(level);
+                    if (snapshot is null)
+                    {
+                        continue;
+                    }
+
+                    snapshots.Add(snapshot.Value);
+                    if (snapshots.Count >= FixedLevels)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogAlive($"{context}-levels-error bar={bar} error={ex.Message}");
+            }
+
+            return snapshots;
+        }
+
+        private void TryExportBar(int bar, BarData barData, IndicatorCandle? candle, bool force = false)
+        {
             if (_exportedBars.Contains(bar))
             {
-                reason = "already-exported";
-                return false;
+                return;
             }
 
-            if (bar < CurrentBar - 1)
+            if (!barData.IsComplete())
             {
-                reason = "historical";
-                return true;
+                LogAlive($"skip-incomplete bar={bar} hasDom={(barData.DOM != null ? 1 : 0)} hasCluster={(barData.Cluster != null ? 1 : 0)} hasOhlc={(barData.OHLC != null ? 1 : 0)} ts={(barData.MasterTimestamp.HasValue ? barData.MasterTimestamp.Value.ToString("o") : "null")}");
+                return;
             }
 
-            var closeTime = EnsureUtc(candle.Time);
+            var masterTimestamp = barData.MasterTimestamp ?? EnsureUtc(DateTime.UtcNow);
 
-            if (bar < CurrentBar)
+            if (!force)
             {
-                reason = "closed";
-                return true;
+                var shouldGate = false;
+                string? gateReason = null;
+
+                if (bar >= CurrentBar)
+                {
+                    shouldGate = true;
+                    var age = DateTime.UtcNow - masterTimestamp;
+                    if (age < TimeSpan.Zero)
+                    {
+                        age = TimeSpan.Zero;
+                    }
+                    if (age >= TimeSpan.FromSeconds(2))
+                    {
+                        shouldGate = false;
+                    }
+                    else
+                    {
+                        gateReason = $"waiting-active ({age.TotalSeconds:F1}s)";
+                    }
+                }
+                else if (bar == CurrentBar - 1 && candle is not null)
+                {
+                    var closeTime = EnsureUtc(candle.Time);
+                    var age = DateTime.UtcNow - closeTime;
+                    if (age < TimeSpan.Zero)
+                    {
+                        age = TimeSpan.Zero;
+                    }
+                    if (age < TimeSpan.FromSeconds(1))
+                    {
+                        shouldGate = true;
+                        gateReason = $"waiting-close ({age.TotalMilliseconds:F0}ms)";
+                    }
+                }
+
+                if (shouldGate)
+                {
+                    if (!_lastGateReasons.TryGetValue(bar, out var existing) || !string.Equals(existing, gateReason, StringComparison.Ordinal))
+                    {
+                        _lastGateReasons[bar] = gateReason ?? "gated";
+                        LogAlive($"gate-skip bar={bar} reason={gateReason ?? "gated"}");
+                    }
+                    return;
+                }
             }
 
-            if (candle.Time.Kind == DateTimeKind.Unspecified)
+            EnsureExporter();
+            try
             {
-                reason = "unspecified-kind";
-                return true;
+                _exporter?.ExportBar(barData);
+                LogAlive($"exported bar={bar} ts={masterTimestamp:O} dom={(barData.DOM != null ? 1 : 0)} cluster={(barData.Cluster != null ? 1 : 0)}");
             }
-
-            var age = DateTime.UtcNow - closeTime;
-            if (age > TimeSpan.FromSeconds(5))
+            catch (Exception ex)
             {
-                reason = $"aged-{age.TotalSeconds:F0}s";
-                return true;
+                LogAlive($"export-failed bar={bar} error={ex.Message}");
+                throw;
             }
 
-            reason = $"waiting-active ({age.TotalSeconds:F1}s)";
-            return false;
+            _exportedBars.Add(bar);
+            _lastGateReasons.Remove(bar);
+            _barCache.Remove(bar);
         }
 
         private void EnsureExporter()
@@ -569,28 +588,108 @@ namespace MIF.AtasIndicator
         {
             foreach (var methodName in PriceLevelMethodNames)
             {
-                var method = candle.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (method is null)
-                {
-                    continue;
-                }
+                var methods = candle.GetType()
+                    .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Where(m => m.Name == methodName);
 
-                object? result = method.GetParameters().Length == 0
-                    ? method.Invoke(candle, Array.Empty<object>())
-                    : method.Invoke(candle, new object?[] { true });
-
-                if (result is IEnumerable enumerable)
+                foreach (var method in methods)
                 {
-                    foreach (var item in enumerable)
+                    var parameters = method.GetParameters();
+                    foreach (var args in BuildArgumentCandidates(parameters))
                     {
-                        if (item is not null)
+                        object? result;
+                        try
                         {
-                            yield return item;
+                            result = method.Invoke(candle, args);
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+
+                        if (result is IEnumerable enumerable)
+                        {
+                            foreach (var item in enumerable)
+                            {
+                                if (item is not null)
+                                {
+                                    yield return item;
+                                }
+                            }
+
+                            yield break;
                         }
                     }
-                    yield break;
                 }
             }
+        }
+
+        private static IEnumerable<object?[]> BuildArgumentCandidates(ParameterInfo[] parameters)
+        {
+            if (parameters.Length == 0)
+            {
+                yield return Array.Empty<object?>();
+                yield break;
+            }
+
+            var defaults = new object?[parameters.Length];
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                defaults[i] = GetDefaultParameterValue(parameters[i].ParameterType);
+            }
+
+            yield return defaults;
+
+            if (parameters.All(p => IsBooleanType(p.ParameterType)))
+            {
+                var total = 1 << parameters.Length;
+                for (var mask = 0; mask < total; mask++)
+                {
+                    var args = new object?[parameters.Length];
+                    for (var i = 0; i < parameters.Length; i++)
+                    {
+                        args[i] = (mask & (1 << i)) != 0;
+                    }
+                    yield return args;
+                }
+            }
+        }
+
+        private static object? GetDefaultParameterValue(Type parameterType)
+        {
+            if (IsBooleanType(parameterType))
+            {
+                return false;
+            }
+
+            if (parameterType == typeof(int) || parameterType == typeof(int?))
+            {
+                return 0;
+            }
+
+            if (parameterType == typeof(double) || parameterType == typeof(double?))
+            {
+                return 0d;
+            }
+
+            if (parameterType == typeof(decimal) || parameterType == typeof(decimal?))
+            {
+                return 0m;
+            }
+
+            if (parameterType == typeof(string))
+            {
+                return string.Empty;
+            }
+
+            return parameterType.IsValueType
+                ? Activator.CreateInstance(parameterType)
+                : null;
+        }
+
+        private static bool IsBooleanType(Type type)
+        {
+            return type == typeof(bool) || type == typeof(bool?);
         }
 
         private static PriceLevelSnapshot? CreateSnapshot(object level)
@@ -672,12 +771,33 @@ namespace MIF.AtasIndicator
 
         private static DateTime EnsureUtc(DateTime value)
         {
-            return value.Kind switch
+            switch (value.Kind)
             {
-                DateTimeKind.Utc => value,
-                DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
-                _ => value.ToUniversalTime()
-            };
+                case DateTimeKind.Utc:
+                    return value;
+                case DateTimeKind.Local:
+                    return value.ToUniversalTime();
+                case DateTimeKind.Unspecified:
+                    var assumeUtc = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+                    var assumeLocal = DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime();
+                    var now = DateTime.UtcNow;
+
+                    if (assumeUtc > now + TimeSpan.FromMinutes(1) && assumeLocal <= now + TimeSpan.FromMinutes(1))
+                    {
+                        return assumeLocal;
+                    }
+
+                    if (assumeLocal > now + TimeSpan.FromMinutes(1) && assumeUtc <= now + TimeSpan.FromMinutes(1))
+                    {
+                        return assumeUtc;
+                    }
+
+                    var utcDiff = Math.Abs((assumeUtc - now).TotalHours);
+                    var localDiff = Math.Abs((assumeLocal - now).TotalHours);
+                    return localDiff <= utcDiff ? assumeLocal : assumeUtc;
+                default:
+                    return value.ToUniversalTime();
+            }
         }
 
         private static decimal GetDecimal(object source, string[] propertyNames, decimal fallback = 0m)
