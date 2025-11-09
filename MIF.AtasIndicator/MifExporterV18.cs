@@ -1,13 +1,16 @@
-using ATAS.Indicators;
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
+using System.Threading;
+using System.Threading.Tasks;
+using ATAS.Indicators;
 
 namespace MIF.AtasIndicator
 {
@@ -168,10 +171,11 @@ namespace MIF.AtasIndicator
         private int _dimensionErrors = 0;
         private List<string> _recordBuffer = new();
         private HashSet<int> _processedBarIndices = new(); // V14: 改用bar索引
+        private string? _cachedInstrument = null;
+        private string? _cachedTimeframe = null;
 
         // === DOM 细分统计 ===
         private int _domLevelsCount = 0;
-        private int _domCumulativeCount = 0;
         private int _domUnavailableCount = 0;
 
         // === Cluster 统计 ===
@@ -183,6 +187,14 @@ namespace MIF.AtasIndicator
         private double[]? _lastAskVolumes = null;
         private int _domStaleCount = 0;
         private const int DOM_STALE_THRESHOLD = 5;
+        private static readonly string[] DomPricePropertyNames = { "Price", "PriceDouble", "P" };
+        private static readonly string[] DomVolumePropertyNames = { "Volume", "Vol", "Quantity", "Value", "Size" };
+        private static readonly string[] DomAskFlagPropertyNames = { "IsAsk", "IsBuy" };
+        private static readonly string[] DomBidFlagPropertyNames = { "IsBid", "IsSell" };
+        private static readonly string[] DomSidePropertyNames = { "Side", "Direction", "Type" };
+        private static readonly string[] DomAskCollectionPropertyNames = { "Asks", "AskLevels", "BuyLevels" };
+        private static readonly string[] DomBidCollectionPropertyNames = { "Bids", "BidLevels", "SellLevels" };
+        private static readonly string[] DomLevelCollectionPropertyNames = { "Levels", "Depth", "Dom", "Entries" };
 
         // === V18: 导出节流 ===
         private int _lastWrittenBar = -1;
@@ -319,29 +331,20 @@ namespace MIF.AtasIndicator
             {
                 if (ExportDom)
                 {
-                    if (IsRealtimeBar(bar))
-                    {
-                        // 实时：使用snapshot
-                        domSnapshot = CaptureDomSnapshot(bar, candle);
-                    }
-                    else
-                    {
-                        // 历史：使用异步历史接口
-                        domSnapshot = CaptureDomHistorySnapshot(bar, candle, tOpen, tClose);
-                    }
+                    domSnapshot = IsRealtimeBar(bar)
+                        ? CaptureDomSnapshot(bar, candle)
+                        : CaptureDomHistorySnapshot(bar, candle, tOpen, tClose);
 
                     if (domSnapshot != null && domSnapshot.IsValid)
                     {
                         _domSuccessCount++;
 
-                        // === DOM 活性自检：检测连续相同数据 ===
                         if (_lastAskVolumes != null &&
                             domSnapshot.AllAskVolumes.Length == _lastAskVolumes.Length &&
                             domSnapshot.AllAskVolumes.SequenceEqual(_lastAskVolumes))
                         {
                             _domStaleCount++;
 
-                            // 连续多次完全相同 → 降级为 unavailable
                             if (_domStaleCount >= DOM_STALE_THRESHOLD)
                             {
                                 if ((bar & 63) == 0)
@@ -349,25 +352,24 @@ namespace MIF.AtasIndicator
                                     File.AppendAllText(_alivePath!,
                                         $"{DateTime.UtcNow:o} DOM-STALE bar={bar}: Same data for {_domStaleCount} consecutive bars, degrading to unavailable\n");
                                 }
-                                domSnapshot = null; // 标记为无效
+
+                                domSnapshot = null;
                                 _domUnavailableCount++;
                             }
                         }
                         else
                         {
-                            _domStaleCount = 0; // 重置计数器
+                            _domStaleCount = 0;
                         }
 
-                        // 深拷贝当前 DOM 用于下次对比
                         if (domSnapshot != null)
                         {
                             _lastAskVolumes = (double[])domSnapshot.AllAskVolumes.Clone();
 
-                            // 按数据源统计
                             if (domSnapshot.DataSource == "dom_levels")
+                            {
                                 _domLevelsCount++;
-                            else if (domSnapshot.DataSource == "dom_cumulative")
-                                _domCumulativeCount++;
+                            }
                         }
 
                         if (domSnapshot != null &&
@@ -382,7 +384,7 @@ namespace MIF.AtasIndicator
                     {
                         _domFailCount++;
                         _domUnavailableCount++;
-                        _domStaleCount = 0; // 重置
+                        _domStaleCount = 0;
                         _lastAskVolumes = null;
                     }
                 }
@@ -398,6 +400,13 @@ namespace MIF.AtasIndicator
                     File.AppendAllText(_alivePath!,
                         $"{DateTime.UtcNow:o} DOM-ERROR bar={bar}: {ex.Message}\n");
                 }
+            }
+
+            // === Cluster 原始层级（用于成交量和结构）===
+            PriceLevelDTO[] clusterLevels;
+            if (!AtasBindings.TryGetClusterLevels(this, bar, out clusterLevels) || clusterLevels == null)
+            {
+                clusterLevels = Array.Empty<PriceLevelDTO>();
             }
 
             // === Epsilon构建：强制固定维度（仅来自DOM）===
@@ -432,18 +441,10 @@ namespace MIF.AtasIndicator
             double realizedBuy = 0.0;
             double realizedSell = 0.0;
 
-            var allLevels2 = candle.GetAllPriceLevels();
-            if (allLevels2 != null)
+            if (clusterLevels.Length > 0)
             {
-                var levelsList2 = allLevels2.ToList();
-                foreach (var level in levelsList2)
-                {
-                    if (level != null)
-                    {
-                        realizedBuy += (double)level.Ask;
-                        realizedSell += (double)level.Bid;
-                    }
-                }
+                realizedBuy = clusterLevels.Sum(l => l.Ask);
+                realizedSell = clusterLevels.Sum(l => l.Bid);
             }
 
             if (_skipZeroTrades && realizedBuy == 0 && realizedSell == 0)
@@ -506,7 +507,7 @@ namespace MIF.AtasIndicator
             }
 
             // === V18: Cluster 结构快照（与 DOM/epsilon 解耦，使用新方法）===
-            var cluster = CaptureClusterLevels(bar);
+            var cluster = BuildClusterSnapshot(clusterLevels);
 
             // === Cluster 统计 ===
             if (cluster.IsValid && cluster.N > 0)
@@ -624,85 +625,13 @@ namespace MIF.AtasIndicator
             try
             {
                 var depthInfo = MarketDepthInfo;
-                if (depthInfo == null) return null;
-
-                var dom = depthInfo.GetMarketDepthSnapshot();
-                if (dom == null) return null;
-
-                if (dom is System.Collections.IEnumerable enumerable)
+                if (depthInfo == null)
                 {
-                    var elements = enumerable.Cast<object>().ToList();
-                    if (!elements.Any()) return GetFallbackSnapshot(depthInfo);
-
-                    var asks = new List<(decimal price, decimal volume)>();
-                    var bids = new List<(decimal price, decimal volume)>();
-
-                    foreach (var elem in elements)
-                    {
-                        var price = GetPropertyValue<decimal>(elem, "Price");
-                        var volume = GetPropertyValue<decimal>(elem, "Volume");
-                        var isAsk = GetPropertyValue<bool>(elem, "IsAsk");
-                        var isBid = GetPropertyValue<bool>(elem, "IsBid");
-
-                        if (!price.HasValue || !volume.HasValue) continue;
-
-                        if (isAsk.HasValue && isAsk.Value)
-                            asks.Add((price.Value, volume.Value));
-                        else if (isBid.HasValue && isBid.Value)
-                            bids.Add((price.Value, volume.Value));
-                    }
-
-                    if (asks.Any() && bids.Any())
-                    {
-                        var sortedAsks = asks.OrderBy(x => x.price).Take(_maxLevels).ToList();
-                        var sortedBids = bids.OrderByDescending(x => x.price).Take(_maxLevels).ToList();
-
-                        var bestAsk = sortedAsks.First();
-                        var bestBid = sortedBids.First();
-
-                        // === 固定大小数组，zero-padding（强制深拷贝，每次新分配）===
-                        // 每次都创建全新数组实例，避免共享引用
-                        double[] askPrices = new double[_maxLevels];
-                        double[] askVolumes = new double[_maxLevels];
-                        double[] bidPrices = new double[_maxLevels];
-                        double[] bidVolumes = new double[_maxLevels];
-
-                        for (int i = 0; i < sortedAsks.Count; i++)
-                        {
-                            askPrices[i] = (double)sortedAsks[i].price;
-                            askVolumes[i] = (double)sortedAsks[i].volume;
-                        }
-
-                        for (int i = 0; i < sortedBids.Count; i++)
-                        {
-                            bidPrices[i] = (double)sortedBids[i].price;
-                            bidVolumes[i] = (double)sortedBids[i].volume;
-                        }
-
-                        return new DomSnapshotData
-                        {
-                            BestAskPrice = (double)bestAsk.price,
-                            BestBidPrice = (double)bestBid.price,
-                            BestAskVolume = (double)bestAsk.volume,
-                            BestBidVolume = (double)bestBid.volume,
-
-                            AllAskPrices = askPrices,
-                            AllAskVolumes = askVolumes,
-                            AllBidPrices = bidPrices,
-                            AllBidVolumes = bidVolumes,
-
-                            TotalAskLevels = asks.Count,
-                            TotalBidLevels = bids.Count,
-                            ExtractedLevels = Math.Min(sortedAsks.Count, sortedBids.Count),
-                            DataSource = "dom_levels",
-                            IsValid = true
-                        };
-                    }
-
-                    return GetFallbackSnapshot(depthInfo);
+                    return null;
                 }
 
-                return GetFallbackSnapshot(depthInfo);
+                var dom = depthInfo.GetMarketDepthSnapshot();
+                return BuildDomSnapshot(dom, "dom_levels");
             }
             catch
             {
@@ -715,20 +644,44 @@ namespace MIF.AtasIndicator
         {
             try
             {
-                // 尝试使用历史接口
-                // Note: 这需要 DataProvider?.GetMarketDepthSnapshotsAsync(MarketDepthSnapshotRequest)
-                // 如果你的环境/许可证不提供历史DOM，这会返回null
+                var provider = GetDataProviderInstance();
+                if (provider == null)
+                {
+                    return null;
+                }
 
-                // 简化版实现：直接标记为unavailable
-                // 因为GetMarketDepthSnapshotsAsync是异步的，在OnCalculate中调用需要特殊处理
-                // 这里先返回null，让epsilon标记为"unavailable"
+                var instrument = TryGetInstrumentKey(candle);
+                var timeframe = TryGetTimeframeKey();
 
-                // TODO: 如果需要完整历史DOM支持，需要：
-                // 1. 在构造函数或OnCalculate开始时异步预加载历史DOM数据
-                // 2. 缓存历史DOM数据供后续使用
-                // 3. 或者使用ATAS提供的同步历史DOM接口（如果有）
+                var snapshots = RequestHistoricalDomSnapshots(provider, tOpen, tClose, _maxLevels, instrument, timeframe);
+                if (snapshots == null)
+                {
+                    return null;
+                }
 
-                return null;
+                object? candidate = null;
+                DateTime? candidateTime = null;
+
+                foreach (var item in snapshots)
+                {
+                    if (item == null) continue;
+
+                    var time = GetPropertyValue<DateTime>(item!, "Time") ?? GetPropertyValue<DateTime>(item!, "Timestamp");
+                    if (time.HasValue)
+                    {
+                        if (time.Value <= tClose && (candidateTime == null || time.Value > candidateTime.Value))
+                        {
+                            candidateTime = time.Value;
+                            candidate = item;
+                        }
+                    }
+                    else
+                    {
+                        candidate = item;
+                    }
+                }
+
+                return BuildDomSnapshot(candidate, "dom_levels");
             }
             catch
             {
@@ -736,36 +689,527 @@ namespace MIF.AtasIndicator
             }
         }
 
-        private DomSnapshotData? GetFallbackSnapshot(dynamic depthInfo)
+        private DomSnapshotData? BuildDomSnapshot(object? source, string dataSource)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            if (source is IEnumerable enumerable)
+            {
+                return BuildDomFromFlatEnumerable(enumerable, dataSource);
+            }
+
+            var asks = TryGetEnumerable(source, DomAskCollectionPropertyNames);
+            var bids = TryGetEnumerable(source, DomBidCollectionPropertyNames);
+            if (asks != null && bids != null)
+            {
+                return BuildDomFromSideEnumerables(asks, bids, dataSource);
+            }
+
+            var levels = TryGetEnumerable(source, DomLevelCollectionPropertyNames);
+            if (levels != null)
+            {
+                return BuildDomFromFlatEnumerable(levels, dataSource);
+            }
+
+            return null;
+        }
+
+        private DomSnapshotData? BuildDomFromFlatEnumerable(IEnumerable enumerable, string dataSource)
+        {
+            var asks = new List<(double price, double volume)>();
+            var bids = new List<(double price, double volume)>();
+
+            foreach (var item in enumerable)
+            {
+                if (item == null) continue;
+
+                var price = TryGetDouble(item, DomPricePropertyNames);
+                var volume = TryGetDouble(item, DomVolumePropertyNames);
+                if (!price.HasValue || !volume.HasValue) continue;
+
+                var isAsk = TryGetBool(item, DomAskFlagPropertyNames);
+                var isBid = TryGetBool(item, DomBidFlagPropertyNames);
+
+                if (isAsk == true)
+                {
+                    asks.Add((price.Value, volume.Value));
+                    continue;
+                }
+
+                if (isBid == true)
+                {
+                    bids.Add((price.Value, volume.Value));
+                    continue;
+                }
+
+                var side = GetStringProperty(item, DomSidePropertyNames);
+                if (!string.IsNullOrWhiteSpace(side))
+                {
+                    if (side.StartsWith("a", StringComparison.OrdinalIgnoreCase) ||
+                        side.StartsWith("s", StringComparison.OrdinalIgnoreCase) ||
+                        side.StartsWith("o", StringComparison.OrdinalIgnoreCase))
+                    {
+                        asks.Add((price.Value, volume.Value));
+                    }
+                    else if (side.StartsWith("b", StringComparison.OrdinalIgnoreCase))
+                    {
+                        bids.Add((price.Value, volume.Value));
+                    }
+                }
+            }
+
+            return CreateDomSnapshot(asks, bids, dataSource);
+        }
+
+        private DomSnapshotData? BuildDomFromSideEnumerables(IEnumerable askEnumerable, IEnumerable bidEnumerable, string dataSource)
+        {
+            var asks = ExtractDomSideLevels(askEnumerable);
+            var bids = ExtractDomSideLevels(bidEnumerable);
+            return CreateDomSnapshot(asks, bids, dataSource);
+        }
+
+        private List<(double price, double volume)> ExtractDomSideLevels(IEnumerable source)
+        {
+            var list = new List<(double price, double volume)>();
+            foreach (var item in source)
+            {
+                if (item == null) continue;
+                var price = TryGetDouble(item, DomPricePropertyNames);
+                var volume = TryGetDouble(item, DomVolumePropertyNames);
+                if (price.HasValue && volume.HasValue)
+                {
+                    list.Add((price.Value, volume.Value));
+                }
+            }
+            return list;
+        }
+
+        private DomSnapshotData? CreateDomSnapshot(List<(double price, double volume)> asks, List<(double price, double volume)> bids, string dataSource)
+        {
+            if (asks.Count == 0 || bids.Count == 0)
+            {
+                return null;
+            }
+
+            var sortedAsks = asks.OrderBy(x => x.price).Take(_maxLevels).ToList();
+            var sortedBids = bids.OrderByDescending(x => x.price).Take(_maxLevels).ToList();
+
+            if (sortedAsks.Count == 0 || sortedBids.Count == 0)
+            {
+                return null;
+            }
+
+            var bestAsk = sortedAsks[0];
+            var bestBid = sortedBids[0];
+
+            var askPrices = new double[_maxLevels];
+            var askVolumes = new double[_maxLevels];
+            var bidPrices = new double[_maxLevels];
+            var bidVolumes = new double[_maxLevels];
+
+            for (int i = 0; i < sortedAsks.Count; i++)
+            {
+                askPrices[i] = sortedAsks[i].price;
+                askVolumes[i] = sortedAsks[i].volume;
+            }
+
+            for (int i = 0; i < sortedBids.Count; i++)
+            {
+                bidPrices[i] = sortedBids[i].price;
+                bidVolumes[i] = sortedBids[i].volume;
+            }
+
+            return new DomSnapshotData
+            {
+                BestAskPrice = bestAsk.price,
+                BestBidPrice = bestBid.price,
+                BestAskVolume = bestAsk.volume,
+                BestBidVolume = bestBid.volume,
+                AllAskPrices = askPrices,
+                AllAskVolumes = askVolumes,
+                AllBidPrices = bidPrices,
+                AllBidVolumes = bidVolumes,
+                TotalAskLevels = asks.Count,
+                TotalBidLevels = bids.Count,
+                ExtractedLevels = Math.Min(sortedAsks.Count, sortedBids.Count),
+                DataSource = dataSource,
+                IsValid = true
+            };
+        }
+
+        private IEnumerable? TryGetEnumerable(object source, string[] propertyNames)
+        {
+            foreach (var name in propertyNames)
+            {
+                var value = GetPropertyObject(source, name);
+                if (value is IEnumerable enumerable)
+                {
+                    return enumerable;
+                }
+            }
+
+            return null;
+        }
+
+        private double? TryGetDouble(object obj, params string[] propertyNames)
+        {
+            foreach (var name in propertyNames)
+            {
+                var value = GetPropertyValue<double>(obj, name);
+                if (value.HasValue) return value.Value;
+
+                var alt = GetPropertyValue<decimal>(obj, name);
+                if (alt.HasValue) return (double)alt.Value;
+            }
+
+            foreach (var name in propertyNames)
+            {
+                var raw = GetPropertyObject(obj, name);
+                if (raw == null) continue;
+
+                switch (raw)
+                {
+                    case double d:
+                        return d;
+                    case float f:
+                        return f;
+                    case long l:
+                        return l;
+                    case int i:
+                        return i;
+                    case decimal dec:
+                        return (double)dec;
+                    case string s when double.TryParse(s, out var parsed):
+                        return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        private bool? TryGetBool(object obj, params string[] propertyNames)
+        {
+            foreach (var name in propertyNames)
+            {
+                var value = GetPropertyValue<bool>(obj, name);
+                if (value.HasValue) return value.Value;
+
+                var intVal = GetPropertyValue<int>(obj, name);
+                if (intVal.HasValue) return intVal.Value != 0;
+
+                var str = GetStringProperty(obj, name);
+                if (!string.IsNullOrWhiteSpace(str))
+                {
+                    if (bool.TryParse(str, out var parsedBool))
+                    {
+                        return parsedBool;
+                    }
+
+                    if (str.Equals("ask", StringComparison.OrdinalIgnoreCase) ||
+                        str.Equals("sell", StringComparison.OrdinalIgnoreCase) ||
+                        str.Equals("offer", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    if (str.Equals("bid", StringComparison.OrdinalIgnoreCase) ||
+                        str.Equals("buy", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private string? GetStringProperty(object obj, params string[] propertyNames)
+        {
+            foreach (var name in propertyNames)
+            {
+                var value = GetPropertyObject(obj, name);
+                if (value == null) continue;
+
+                if (value is string s)
+                {
+                    return s;
+                }
+
+                return value.ToString();
+            }
+
+            return null;
+        }
+
+        private object? GetPropertyObject(object obj, string propertyName)
         {
             try
             {
-                var cumAsk = depthInfo.CumulativeDomAsks;
-                var cumBid = depthInfo.CumulativeDomBids;
-
-                if (cumAsk > 0 && cumBid > 0)
-                {
-                    return new DomSnapshotData
-                    {
-                        BestAskPrice = 0,
-                        BestBidPrice = 0,
-                        BestAskVolume = (double)cumAsk,
-                        BestBidVolume = (double)cumBid,
-                        AllAskPrices = new double[_maxLevels],
-                        AllAskVolumes = new double[_maxLevels],
-                        AllBidPrices = new double[_maxLevels],
-                        AllBidVolumes = new double[_maxLevels],
-                        TotalAskLevels = 0,
-                        TotalBidLevels = 0,
-                        ExtractedLevels = 0,
-                        DataSource = "dom_cumulative",
-                        IsValid = true
-                    };
-                }
+                return obj.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(obj);
             }
-            catch { }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private object? GetDataProviderInstance()
+        {
+            var type = GetType();
+            while (type != null)
+            {
+                var prop = type.GetProperty("DataProvider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (prop != null)
+                {
+                    try
+                    {
+                        return prop.GetValue(this);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
+                }
+
+                type = type.BaseType;
+            }
 
             return null;
+        }
+
+        private IEnumerable? RequestHistoricalDomSnapshots(object provider, DateTime from, DateTime to, int depth, string? instrument, string? timeframe)
+        {
+            try
+            {
+                var providerType = provider.GetType();
+                var methods = providerType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Where(m => m.Name == "GetMarketDepthSnapshotsAsync");
+
+                foreach (var method in methods)
+                {
+                    var parameters = method.GetParameters();
+                    object?[] args;
+
+                    if (parameters.Length == 0)
+                    {
+                        args = Array.Empty<object?>();
+                    }
+                    else
+                    {
+                        var request = CreateMarketDepthRequest(providerType.Assembly, from, to, depth, instrument, timeframe);
+                        if (request == null)
+                        {
+                            continue;
+                        }
+
+                        if (parameters.Length == 1)
+                        {
+                            args = new[] { request };
+                        }
+                        else if (parameters.Length == 2 && parameters[1].ParameterType == typeof(CancellationToken))
+                        {
+                            args = new object?[] { request, CancellationToken.None };
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
+                    var taskObj = method.Invoke(provider, args);
+                    if (taskObj is Task task)
+                    {
+                        task.ConfigureAwait(false).GetAwaiter().GetResult();
+                        var resultProp = task.GetType().GetProperty("Result");
+                        if (resultProp != null && resultProp.GetValue(task) is IEnumerable enumerable)
+                        {
+                            return enumerable;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private object? CreateMarketDepthRequest(Assembly providerAssembly, DateTime from, DateTime to, int depth, string? instrument, string? timeframe)
+        {
+            var candidateTypeNames = new[]
+            {
+                "ATAS.DataProviders.MarketDepthSnapshotRequest",
+                "ATAS.Indicators.Helpers.MarketDepthSnapshotRequest",
+                "ATAS.MarketData.MarketDepthSnapshotRequest"
+            };
+
+            foreach (var asm in EnumerateAssemblies(providerAssembly))
+            {
+                foreach (var typeName in candidateTypeNames)
+                {
+                    var type = asm.GetType(typeName);
+                    if (type == null) continue;
+
+                    object? request = null;
+                    try
+                    {
+                        request = Activator.CreateInstance(type);
+                    }
+                    catch
+                    {
+                        request = null;
+                    }
+
+                    if (request == null) continue;
+
+                    SetPropertyIfExists(request, new[] { "From", "Start", "StartTime" }, from);
+                    SetPropertyIfExists(request, new[] { "To", "End", "EndTime" }, to);
+                    SetPropertyIfExists(request, new[] { "Depth", "Levels", "DepthLimit" }, depth);
+
+                    if (!string.IsNullOrWhiteSpace(instrument))
+                    {
+                        SetPropertyIfExists(request, new[] { "Instrument", "Symbol", "Security", "Ticker" }, instrument);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(timeframe))
+                    {
+                        SetPropertyIfExists(request, new[] { "TimeFrame", "Timeframe", "Interval", "Aggregation" }, timeframe);
+                    }
+
+                    return request;
+                }
+            }
+
+            return null;
+        }
+
+        private IEnumerable<Assembly> EnumerateAssemblies(Assembly primary)
+        {
+            yield return primary;
+
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (asm == primary) continue;
+                yield return asm;
+            }
+        }
+
+        private string? TryGetInstrumentKey(IndicatorCandle candle)
+        {
+            if (!string.IsNullOrWhiteSpace(_cachedInstrument))
+            {
+                return _cachedInstrument;
+            }
+
+            object? instrumentInfo = GetPropertyObject(this, "InstrumentInfo") ?? GetPropertyObject(this, "Instrument");
+            string? candidate = null;
+
+            if (instrumentInfo != null)
+            {
+                candidate = GetStringProperty(instrumentInfo, "Instrument", "Symbol", "Name", "Code", "Ticker");
+            }
+
+            if (string.IsNullOrWhiteSpace(candidate) && candle != null)
+            {
+                candidate = GetStringProperty(candle, "Instrument", "Symbol");
+            }
+
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                candidate = GetStringProperty(this, "Symbol", "Ticker");
+            }
+
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                _cachedInstrument = candidate;
+            }
+
+            return _cachedInstrument;
+        }
+
+        private string? TryGetTimeframeKey()
+        {
+            if (!string.IsNullOrWhiteSpace(_cachedTimeframe))
+            {
+                return _cachedTimeframe;
+            }
+
+            string? candidate = GetStringProperty(this, "TimeFrame", "Timeframe", "Interval");
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                var series = GetPropertyObject(this, "Series") ?? GetPropertyObject(this, "CurrentSeries");
+                if (series != null)
+                {
+                    candidate = GetStringProperty(series, "TimeFrame", "Timeframe", "Interval");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                _cachedTimeframe = candidate;
+            }
+
+            return _cachedTimeframe;
+        }
+
+        private static void SetPropertyIfExists(object target, string[] propertyNames, object? value)
+        {
+            if (target == null || value == null)
+            {
+                return;
+            }
+
+            foreach (var name in propertyNames)
+            {
+                var prop = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (prop == null || !prop.CanWrite) continue;
+
+                try
+                {
+                    var propertyType = prop.PropertyType;
+                    var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+
+                    object? convertedValue = value;
+                    if (value is string strValue && underlying != typeof(string))
+                    {
+                        if (underlying == typeof(DateTime) && DateTime.TryParse(strValue, out var parsedDate))
+                        {
+                            convertedValue = parsedDate;
+                        }
+                        else if (underlying.IsEnum)
+                        {
+                            convertedValue = Enum.Parse(underlying, strValue, true);
+                        }
+                        else
+                        {
+                            convertedValue = Convert.ChangeType(strValue, underlying);
+                        }
+                    }
+                    else if (!underlying.IsAssignableFrom(value.GetType()))
+                    {
+                        if (underlying.IsEnum)
+                        {
+                            convertedValue = Enum.Parse(underlying, value.ToString()!, true);
+                        }
+                        else
+                        {
+                            convertedValue = Convert.ChangeType(value, underlying);
+                        }
+                    }
+
+                    prop.SetValue(target, convertedValue);
+                    return;
+                }
+                catch
+                {
+                    // continue to next candidate
+                }
+            }
         }
 
         private void LogHeartbeat()
@@ -779,7 +1223,6 @@ namespace MIF.AtasIndicator
 
             // DOM 细分统计
             var domLevelsRate = _domSuccessCount > 0 ? _domLevelsCount * 100.0 / _domSuccessCount : 0;
-            var domCumulativeRate = _domSuccessCount > 0 ? _domCumulativeCount * 100.0 / _domSuccessCount : 0;
             var domUnavailableRate = (_domSuccessCount + _domFailCount) > 0
                 ? _domUnavailableCount * 100.0 / (_domSuccessCount + _domFailCount)
                 : 0;
@@ -800,7 +1243,6 @@ namespace MIF.AtasIndicator
                 $"  Duplicates: {_duplicateRecords}\n" +
                 $"  DOM success: {_domSuccessCount} ({domSuccessRate:F1}%)\n" +
                 $"    ├─ DOM levels: {_domLevelsCount} ({domLevelsRate:F1}%)\n" +
-                $"    ├─ DOM cumulative: {_domCumulativeCount} ({domCumulativeRate:F1}%)\n" +
                 $"    └─ DOM unavailable: {_domUnavailableCount} ({domUnavailableRate:F1}%)\n" +
                 $"  DOM stale count: {_domStaleCount} (consecutive)\n" +
                 $"  Cluster success: {_clusterSuccessCount} / {clusterTotal} ({clusterSuccessRate:F1}%)\n" +
@@ -895,7 +1337,6 @@ namespace MIF.AtasIndicator
 
                 // DOM 细分统计
                 var domLevelsRate = _domSuccessCount > 0 ? _domLevelsCount * 100.0 / _domSuccessCount : 0;
-                var domCumulativeRate = _domSuccessCount > 0 ? _domCumulativeCount * 100.0 / _domSuccessCount : 0;
                 var domUnavailableRate = (_domSuccessCount + _domFailCount) > 0
                     ? _domUnavailableCount * 100.0 / (_domSuccessCount + _domFailCount)
                     : 0;
@@ -918,7 +1359,6 @@ namespace MIF.AtasIndicator
                     $"  Duplicate bars filtered: {_duplicateRecords}\n" +
                     $"  DOM success rate: {domSuccessRate:F1}%\n" +
                     $"    ├─ DOM levels: {_domLevelsCount} ({domLevelsRate:F1}%)\n" +
-                    $"    ├─ DOM cumulative: {_domCumulativeCount} ({domCumulativeRate:F1}%)\n" +
                     $"    └─ DOM unavailable: {_domUnavailableCount} ({domUnavailableRate:F1}%)\n" +
                     $"  Cluster success: {_clusterSuccessCount}/{clusterTotal} ({clusterSuccessRate:F1}%)\n" +
                     $"  Cluster avg effective levels: {clusterAvgEffective:F1}\n" +
@@ -957,41 +1397,45 @@ namespace MIF.AtasIndicator
         {
             public bool IsValid { get; set; }
             public int N { get; set; }
-            public double[] Prices { get; set; } = Array.Empty<double>(); // labels only
+            public double[]? Prices { get; set; } // labels only
             public double[] Ask { get; set; } = Array.Empty<double>();
             public double[] Bid { get; set; } = Array.Empty<double>();
             public string Source => "cluster_levels";
         }
 
-        // === V18: 使用新的TryGetClusterLevels方法 ===
-        private ClusterSnapshot CaptureClusterLevels(int bar)
+        private ClusterSnapshot BuildClusterSnapshot(PriceLevelDTO[] levels)
         {
-            var snap = new ClusterSnapshot { IsValid = false, N = 0 };
+            var snapshot = new ClusterSnapshot { IsValid = false, N = 0 };
 
-            if (!ExportCluster) return snap;
-
-            if (AtasBindings.TryGetClusterLevels(this, bar, out var lvls) && lvls.Length > 0)
+            if (!ExportCluster || levels.Length == 0)
             {
-                int copy = Math.Min(lvls.Length, _maxLevels);
-
-                var ask = new double[_maxLevels];
-                var bid = new double[_maxLevels];
-                var prices = new double[_maxLevels];
-
-                for (int i = 0; i < copy; i++)
-                {
-                    ask[i] = lvls[i].Ask;
-                    bid[i] = lvls[i].Bid;
-                    prices[i] = lvls[i].Price ?? 0.0; // label only
-                }
-
-                snap.IsValid = true;
-                snap.N = copy;
-                snap.Ask = ask;
-                snap.Bid = bid;
-                snap.Prices = prices;
+                return snapshot;
             }
-            return snap;
+
+            int copy = Math.Min(levels.Length, _maxLevels);
+
+            var ask = new double[_maxLevels];
+            var bid = new double[_maxLevels];
+            double[]? prices = _includeClusterPrices ? new double[_maxLevels] : null;
+
+            for (int i = 0; i < copy; i++)
+            {
+                ask[i] = levels[i].Ask;
+                bid[i] = levels[i].Bid;
+
+                if (prices != null)
+                {
+                    prices[i] = levels[i].Price ?? double.NaN;
+                }
+            }
+
+            snapshot.IsValid = copy > 0;
+            snapshot.N = copy;
+            snapshot.Ask = ask;
+            snapshot.Bid = bid;
+            snapshot.Prices = prices;
+
+            return snapshot;
         }
     }
 }
