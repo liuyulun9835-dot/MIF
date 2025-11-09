@@ -1337,7 +1337,6 @@ namespace MIF.AtasIndicator
 
                 // DOM 细分统计
                 var domLevelsRate = _domSuccessCount > 0 ? _domLevelsCount * 100.0 / _domSuccessCount : 0;
-                var domCumulativeRate = _domSuccessCount > 0 ? _domCumulativeCount * 100.0 / _domSuccessCount : 0;
                 var domUnavailableRate = (_domSuccessCount + _domFailCount) > 0
                     ? _domUnavailableCount * 100.0 / (_domSuccessCount + _domFailCount)
                     : 0;
@@ -1360,7 +1359,6 @@ namespace MIF.AtasIndicator
                     $"  Duplicate bars filtered: {_duplicateRecords}\n" +
                     $"  DOM success rate: {domSuccessRate:F1}%\n" +
                     $"    ├─ DOM levels: {_domLevelsCount} ({domLevelsRate:F1}%)\n" +
-                    $"    ├─ DOM cumulative: {_domCumulativeCount} ({domCumulativeRate:F1}%)\n" +
                     $"    └─ DOM unavailable: {_domUnavailableCount} ({domUnavailableRate:F1}%)\n" +
                     $"  Cluster success: {_clusterSuccessCount}/{clusterTotal} ({clusterSuccessRate:F1}%)\n" +
                     $"  Cluster avg effective levels: {clusterAvgEffective:F1}\n" +

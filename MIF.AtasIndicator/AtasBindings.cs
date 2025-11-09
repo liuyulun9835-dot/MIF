@@ -143,53 +143,35 @@ namespace MIF.AtasIndicator
         public static bool TryGetClusterLevels(object indicator, int bar, out PriceLevelDTO[] levels)
         {
             levels = Array.Empty<PriceLevelDTO>();
+
             try
             {
-                var core = indicator as Indicator;
-                if (core is null) return false;
-
-                var candle = core.GetCandle(bar); // 官方推荐：先取 bar 的 IndicatorCandle
-                // 关键：转到接口再取"无参"重载，避免 cacheItem 语义/版本差异
-                if (candle is ISupportedPriceInfo spi)
+                if (indicator is not Indicator core)
                 {
-                    var infos = spi.GetAllPriceLevels(); // IEnumerable<PriceVolumeInfo>
-                    var list = new System.Collections.Generic.List<PriceLevelDTO>();
-                    foreach (var pvi in infos)
-                    {
-                        if (pvi == null) continue;
-
-                        double ask;
-                        double bid;
-                        try { ask = Convert.ToDouble(pvi.Ask); } catch { continue; }
-                        try { bid = Convert.ToDouble(pvi.Bid); } catch { continue; }
-
-                        double? price = null;
-                        try
-                        {
-                            var rawPrice = pvi.Price;
-                            if (rawPrice != null)
-                            {
-                                price = Convert.ToDouble(rawPrice);
-                            }
-                        }
-                        catch
-                        {
-                            price = null;
-                        }
-
-                        list.Add(new PriceLevelDTO
-                        {
-                            Ask = ask,
-                            Bid = bid,
-                            Price = price
-                        });
-                    }
-                    levels = list.ToArray();
-                    return levels.Length > 0;
+                    return false;
                 }
+
+                if (!TryGetLevels(core, bar, out var lvls) || lvls.Length == 0)
+                {
+                    return false;
+                }
+
+                levels = lvls
+                    .Select(lvl => new PriceLevelDTO
+                    {
+                        Ask = lvl.Ask,
+                        Bid = lvl.Bid,
+                        Price = lvl.Price
+                    })
+                    .ToArray();
+
+                return levels.Length > 0;
+            }
+            catch
+            {
+                levels = Array.Empty<PriceLevelDTO>();
                 return false;
             }
-            catch { return false; }
         }
     }
 
