@@ -1406,14 +1406,20 @@ namespace MIF.AtasIndicator
                 {
                     var allLevels = priceInfo.GetAllPriceLevels();
 
-                    if (allLevels != null && allLevels.Count > 0)
+                    if (allLevels is IEnumerable enumerableLevels)
                     {
                         var validLevels = new List<PriceLevelDTO>();
 
-                        foreach (var pl in allLevels)
+                        foreach (var pl in enumerableLevels)
                         {
-                            double ask = pl.Ask ?? 0.0;
-                            double bid = pl.Bid ?? 0.0;
+                            if (pl == null)
+                            {
+                                continue;
+                            }
+
+                            double ask = ExtractNumeric(pl, "Ask", "AskVolume", "BuyVolume") ?? 0.0;
+                            double bid = ExtractNumeric(pl, "Bid", "BidVolume", "SellVolume") ?? 0.0;
+                            double? price = ExtractNumeric(pl, "Price", "PriceLevel");
 
                             if (ask == 0.0 && bid == 0.0)
                             {
@@ -1424,13 +1430,13 @@ namespace MIF.AtasIndicator
                             {
                                 Ask = ask,
                                 Bid = bid,
-                                Price = pl.Price
+                                Price = price
                             });
                         }
 
-                        levels = validLevels.ToArray();
-                        if (levels.Length > 0)
+                        if (validLevels.Count > 0)
                         {
+                            levels = validLevels.ToArray();
                             return true;
                         }
                     }
