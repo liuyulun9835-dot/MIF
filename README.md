@@ -1,12 +1,12 @@
 # MIF ATAS Exporter
 
-This repository contains the custom ATAS indicators that generate JSONL market data exports for the MIF strategy stack. The latest indicator (`MIF Exporter V19`) keeps its export logic inside the indicator class (same approach as the stable v18 release) so ATAS only needs to load a single DLL.
+This repository contains the custom ATAS indicators that generate JSONL market data exports for the MIF strategy stack. The latest indicator (`MIF Exporter V20`) keeps its export logic inside the indicator class (same approach as the stable v18 release) so ATAS only needs to load a single DLL.
 
-## Default export location (V19)
-The v19 indicator automatically resolves the output path when the `Output Directory` input is left blank:
+## Default export location (V20)
+The v20 indicator automatically resolves the output path when the `Output Directory` input is left blank:
 
 - Directory: `%USERPROFILE%\Documents\MIF\atas_export`
-- File name pattern: `<symbol>_<timeframe>_v19.jsonl`
+- File name pattern: `bars_YYYYMMDD.jsonl` (rotates daily inside the export folder)
 
 The indicator ensures the directory exists, then appends one JSON object per bar to the file.
 
