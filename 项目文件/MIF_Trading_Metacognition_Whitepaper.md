@@ -418,6 +418,9 @@ class BarrierRejectionHandler:
 
 ### 4.3 状态机实现
 
+- 新增触发：`if C_ms < 0.4 and ΔΩ_multi < 0 → transition("MSI退相干")`
+  - 行为：降仓/退出；暂停主动信号直至 `C_ms` 恢复
+
 ```python
 class AdaptivePositionManager:
     """
