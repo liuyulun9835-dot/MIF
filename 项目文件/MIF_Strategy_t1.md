@@ -534,6 +534,35 @@ D = (|z(I(Ψ))| - |z(E)|) / (|z(I(Ψ))| + |z(E)|)  (主导度)
 - 需要额外确认才能开仓
 ```
 
+#### （新增）多尺度结构确认 · MSI
+
+**目的**：用跨时间尺度一致性过滤假趋势、保留早期结构参与机会。
+
+**核心量：**
+- `C_ms`：多尺度相位一致性（例：corr([Ω_5m, Ω_15m, Ω_30m])）
+- `ΔΩ_multi`：多尺度延续速率（mean(dΩ/dt across {5m,15m,30m} )）
+- `MSI_weight = sigmoid((C_ms - 0.5)/0.1)`：将一致性映射为置信权重
+
+**开仓门槛（在原有 Ω/I/ICI 条件之上叠加，不替代）**：
+- `MSI_weight > 0.6` → 结构跨尺度协变强，信号可信  
+- 允许**早介入**：若短周期先动、但中周期开始响应（C_ms 上升且 ΔΩ_multi ≥ 0）→ 小仓试探
+
+**伪码：**
+```python
+if base_entry_condition(Ω, I, ICI):  # 保留原有条件
+    C_ms = corr([Ω_5m, Ω_15m, Ω_30m])
+    dO = [dΩ_dt_5m, dΩ_dt_15m, dΩ_dt_30m]
+    ΔΩ_multi = mean(dO)
+    MSI_weight = sigmoid((C_ms - 0.5)/0.1)
+
+    if MSI_weight > 0.6:
+        open_position(confidence=MSI_weight)   # 正常入场
+    elif MSI_weight > 0.5 and ΔΩ_multi >= 0:
+        open_probe(size = min_base_size * 0.5) # 试探入场
+    else:
+        skip()
+```
+
 ### 4.3 仓位管理
 
 **开仓仓位**:
@@ -557,6 +586,21 @@ elif confidence > 0.60:
 else:
     size = 0  # 拒绝
 ```
+
+##### （新增）MSI引导的自适应加减仓
+
+- **加仓**：当 `ΔΩ_multi > 0` 且 `C_ms` 上升 → 结构延续被强化  
+- **减仓**：当 `ΔΩ_multi < 0` 或 `C_ms` 下降 → 结构动能衰减
+
+**伪码：**
+```python
+if ΔΩ_multi > 0 and C_ms is rising:
+    add_position(size = current_position * MSI_weight)
+elif ΔΩ_multi < 0 and C_ms is falling:
+    reduce_position(size = current_position * (1 - MSI_weight))
+```
+
+> 含义：允许**小结构快进快退**，**大结构慢进慢退**；仓位与“结构延续置信度”同向变化。
 
 ### 4.4 时间窗口选择
 
@@ -599,6 +643,23 @@ else:
 ```
 1. 达到预定时间窗口 (15m/30m/1h)
 2. 未触发其他退出条件
+```
+
+##### （新增）MSI 退相干退出原则
+
+仅短周期震荡不触发退出；**跨尺度退相干**才视为结构结束：
+
+**触发式样：**
+- `Ω_5m↓ & Ω_15m↓ & Ω_30m 无响应/走弱` → `trigger_exit("MSI退相干")`
+- （可选）若显式贝叶斯置信度坍塌：`posterior_belief < 0.3` → `close_all("结构信念崩塌")`
+
+**伪码：**
+```python
+if falling(Ω_5m) and falling(Ω_15m) and stale_or_falling(Ω_30m):
+    trigger_exit("MSI退相干")
+
+if posterior_belief < 0.3:
+    close_all_positions("结构信念崩塌")
 ```
 
 ---
