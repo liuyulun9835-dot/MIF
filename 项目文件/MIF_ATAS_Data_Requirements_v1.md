@@ -1067,3 +1067,10 @@ sellVolume = info.Bid; // 卖方成交量 (吃掉了买盘)
 **日期**: 2025-11-09  
 **对应策略**: MIF_Strategy_t1.md  
 **下一版本**: v1.1将在v18验证通过后发布
+---
+
+## 附录：阶段性过渡说明（Snapshot 对齐）
+
+- 本阶段（V14_Final）仅输出 DOM-only 字段；Cluster 字段移至 v2 文档与 MifClusterExporter（v18 相关修复路径已弃用，见 ADR-004_V14_Final_DOM_only.md）。
+- 参见《MIF_ATAS_Data_Requirements_v2.md》了解最新字段规范与导出契约。
+
