@@ -201,7 +201,7 @@ if E > 0.40 and CVD > threshold and volume > threshold:
 **Phase 1** (本周):
 - [x] 设计E三维结构
 - [x] 定义quality计算公式
-- [x] 修复Cluster数据提取
+- [x] 修复Cluster数据提取（更新：该路径已弃用，详见 ADR-004_V14_Final_DOM_only.md）
 - [ ] 导出完整Cluster字段
 
 **Phase 2** (下周):
@@ -705,3 +705,6 @@ Phase-3：再讨论自适应窗口替代固定窗口
 
 ### 重新评估条件
 - 当 C_ms 在多数市场长期低效；或 ΔΩ_multi 与收益无相关；或样本外衰减严重。
+
+> 参看 ADR-004_V14_Final_DOM_only.md 对阶段目标的重设与弃用说明
+

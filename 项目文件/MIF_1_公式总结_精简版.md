@@ -81,6 +81,8 @@ I(u) = exp(-|log(ρ)|)          # 紧迫度平衡
 
 ### 2.2 执行强度 E
 
+> （当前阶段（V14_Final DOM-only）`quality` 暂为占位，待 Cluster 字段落地后启用；不影响 Ω/I/ρ 的计算与门控。）
+
 **基于Cluster数据**:
 ```
 E = Σ_p cluster_delta(p) × cluster_volume(p)

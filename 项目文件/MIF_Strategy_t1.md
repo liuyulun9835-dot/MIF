@@ -402,6 +402,8 @@ E三维向量:
 - magnitude = |z(E)|
 - quality = f(CVD_slope, DEPIN, large_trades)
 
+> 【V14_Final 阶段说明】E 作为向量保留 (direction, magnitude) 两维；`quality` 暂未启用（等待 MifClusterExporter）。所有阈值以分位数表达（详见 Relationalism Supplement 与 v2 数据规范）。
+
 R = z(I(Ψ)) × z(E)  (共振强度)
 D = (|z(I(Ψ))| - |z(E)|) / (|z(I(Ψ))| + |z(E)|)  (主导度)
 
@@ -1149,13 +1151,13 @@ D_belief_threshold = quantile(D_history, 0.25)  # 而非固定-0.25
 **改进优先级**:
 
 ```
-Phase 1 (v18, 立即):
+Phase 1（V14_Final, DOM-only, 冻结参数）：
 □ 用quantile替换所有硬阈值 (D, divergence, u_edge)
 □ 明确所有窗口参数 (dΩ/dt用W=5, POC用M=12)
 
-Phase 2 (t2, 回测后):
-□ 实现u的动态边缘: u_edge = f(w_box)
-□ 背离检测的梯度映射: score = f(divergence)而非0/1
+Phase 2：启动 MifClusterExporter 独立项目：产出 Cluster 精确字段（buy/sell 20 层、trades_count、CVD、large_trade_pct 等），用于后续 E.quality 与精确 ρ 校验。
+□ 建立独立 exporter .csproj 并对接数据契约
+□ 导出并校验 Cluster 精确字段，完成 ρ(dom_proxy) vs ρ(cluster_true) 偏差评估
 
 Phase 3 (t3, 优化后):
 □ 自适应窗口: W = f(realized_volatility)

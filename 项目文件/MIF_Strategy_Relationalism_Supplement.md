@@ -230,17 +230,17 @@ Cluster_levels = 20  # 固定
 ### 3.3 改进优先级
 
 ```
-Phase 1 (v18, 立即):
+Phase 1（V14_Final, DOM-only, 冻结参数）：完成分位数门控与导数窗口文档化；E 暂用二维 (direction, magnitude)；quality 留空占位。
 高优先级
 □ 明确所有未定义的threshold (用quantile)
 □ 统一所有硬阈值为分位数 (D, divergence, u_edge)
 □ 明确所有窗口参数 (文档化W=5, M=12等)
 
-Phase 2 (t2, 回测后):
+Phase 2：启动 MifClusterExporter 独立项目：产出 Cluster 精确字段（buy/sell 20 层、trades_count、CVD、large_trade_pct 等），用于后续 E.quality 与精确 ρ 校验。
 中优先级
-□ u的动态边缘: u_edge = f(w_box)
-□ 背离检测梯度映射: score = f(divergence)而非0/1
-□ D的模糊边界: 渐进映射而非硬截断
+□ 搭建独立的 MifClusterExporter exporter .csproj
+□ 输出并校验 Cluster 精确字段（含 buy/sell 20 层、trades_count、CVD、large_trade_pct 等）
+□ 对比 ρ(dom_proxy) vs ρ(cluster_true)，补完 E.quality 文档
 
 Phase 3 (t3, 长期优化):
 低优先级
@@ -376,7 +376,7 @@ d³Ω/dt³: 加速度变化率
 
 ## 6. 后续行动
 
-### 6.1 Phase 1 (立即,v18)
+### 6.1 Phase 1（V14_Final, DOM-only, 冻结参数）
 
 **必须修改**:
 ```python
@@ -397,7 +397,7 @@ u_high = 0.7
 # 但记录w_box,为Phase 2做准备
 ```
 
-### 6.2 Phase 2 (回测后,t2)
+### 6.2 Phase 2：MifClusterExporter 独立项目
 
 **中优先级**:
 ```python
@@ -477,4 +477,4 @@ jerk = d³Ω_dt³ = (d²Ω_dt²_t - d²Ω_dt²_{t-W}) / Δt
 
 **版本**: v1.0  
 **关联文档**: MIF_Strategy_t1.md  
-**下一步**: 在v18 indicator实现时,遵循Phase 1的修改要求
+**下一步**: 启动 MifClusterExporter 独立项目，输出 Cluster 精确字段后再回填 E.quality 与精确 ρ。

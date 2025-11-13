@@ -2,6 +2,7 @@
 
 > **Market Information Field** - 基于信息场论的加密货币交易策略  
 > **项目状态**: Phase 1 - 数据修复中
+> **NOTE**: 本阶段禁用 cluster_fallback；Cluster 字段由后续独立项目提供（ADR-004）
 
 ---
 
@@ -38,6 +39,7 @@
 ### 代码实现
 1. 读 `MIF_ATAS_Data_Requirements_v1.md` Section 4 (修改指令)
 2. 注意术语澄清部分(文档附录)
+> 数据输出命名示例：`export_dom_v14.jsonl`
 
 ---
 
@@ -67,8 +69,8 @@ Layer 3 (相位层): R/D (共振/主导) - 结构如何被推进?
 
 ## 当前任务
 
-**P0**: 修复v18 Cluster数据提取
-**P1**: 验证数据质量 > 90%覆盖率
+**P0**: 封装 V14_Final (DOM-only) 已设为主线；完成后切至 MifClusterExporter
+**P1**: 建立 MifClusterExporter 独立 .csproj 与数据契约
 **P2**: 实现E三维化
 
 ---

@@ -133,6 +133,8 @@
 - DOM更新频率: ≥1Hz
 - 数据完整性: >95%
 
+> ρ / rho_ratio：V14_Final 使用 20 层总量归一化估算（DOM-only），Cluster 字段由后续的 MifClusterExporter 提供。
+
 ---
 
 ## 4. 与传统方法对比
