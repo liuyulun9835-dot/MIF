@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
+		<OutputType>Library</OutputType>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="ATAS.Indicators">
+			<HintPath>..\..\externals\ATAS\ATAS.Indicators.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+		<!-- 可选：平台日志扩展（LogInfo/LogWarn/...） -->
+		<Reference Include="Utils.Common">
+			<HintPath>..\..\externals\ATAS\Utils.Common.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+		<!-- 如果你使用 ATAS.Indicators.Technical 命名空间，再加这条 DLL（若厂商提供） -->
+		<!--
+    <Reference Include="ATAS.Indicators.Technical">
+      <HintPath>..\..\externals\ATAS\ATAS.Indicators.Technical.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    -->
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.Text.Json" Version="8.0.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="**/*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Include="Exporter/**/*.cs" />
+		<Compile Include="Infrastructure/**/*.cs" />
+		<Compile Include="Models/**/*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="OldVersions/**/*.cs" />
+	</ItemGroup>
+
+</Project>
