@@ -104,10 +104,11 @@ namespace MIF.AtasIndicator.DOM.Exporter
 
             var closeTimeUtc = EnsureUtc(candle.Time);
 
-            // Aggressive flow (realized) must use Cluster's PriceVolumeInfo.
+            // ATAS mapping: realized_buy = candle.GetPriceVolumeInfo().Ask (aggressive buy)
+            //                realized_sell = candle.GetPriceVolumeInfo().Bid (aggressive sell)
             var priceVolume = candle.GetPriceVolumeInfo();
-            double realizedBuy = ExtractDouble(priceVolume, "Ask"); // realized_buy = candle.GetPriceVolumeInfo().Ask
-            double realizedSell = ExtractDouble(priceVolume, "Bid"); // realized_sell = candle.GetPriceVolumeInfo().Bid
+            double realizedBuy = ExtractDouble(priceVolume, "Ask");
+            double realizedSell = ExtractDouble(priceVolume, "Bid");
 
             var domSnapshot = CaptureDomSnapshot(bar);
             if (!domSnapshot.IsValid)
@@ -138,7 +139,9 @@ namespace MIF.AtasIndicator.DOM.Exporter
                 },
                 dom_levels = new
                 {
+                    // ATAS mapping: ask_volumes = MarketDepthSnapshot.Asks (passive sell liquidity)
                     ask_volumes = domSnapshot.AskVolumes,
+                    // ATAS mapping: bid_volumes = MarketDepthSnapshot.Bids (passive buy liquidity)
                     bid_volumes = domSnapshot.BidVolumes
                 },
                 flows = new

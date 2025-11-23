@@ -9,9 +9,9 @@ namespace MIF.AtasIndicator.DOM.Tests;
 public class ExporterMetadataTests
 {
     [Fact]
-    public void DomExporterV14_ShouldNotBeMarkedObsolete()
+    public void DomExporterT1_ShouldNotBeMarkedObsolete()
     {
-        var obsoleteAttr = typeof(MifExporterV14F).GetCustomAttribute<ObsoleteAttribute>();
+        var obsoleteAttr = typeof(DomExporterT1).GetCustomAttribute<ObsoleteAttribute>();
         Assert.Null(obsoleteAttr);
     }
 
@@ -25,7 +25,8 @@ public class ExporterMetadataTests
             typeof(MifExporterV18),
             typeof(MifExporterV19),
             typeof(MifExporterV20),
-            typeof(MifExporterV21)
+            typeof(MifExporterV21),
+            typeof(MifExporterV14F)
         };
 
         foreach (var type in historicTypes)
