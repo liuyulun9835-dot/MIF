@@ -28,6 +28,7 @@ namespace MIF.AtasIndicator.DOM.Exporter
     /// - 重复判断的时间戳精度问题（改用bar索引）
     /// </summary>
     [DisplayName("MIF Exporter V14F")]
+    [Obsolete("Superseded by DomExporterT1. Please use the T1 version for Phase 1.")]
     public class MifExporterV14F : Indicator
     {
         #region 配置参数
