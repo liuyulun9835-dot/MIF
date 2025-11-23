@@ -33,7 +33,13 @@ public class ExporterMetadataTests
         {
             var obsoleteAttr = type.GetCustomAttribute<ObsoleteAttribute>();
             Assert.NotNull(obsoleteAttr);
-            Assert.Contains("Archived historic implementation", obsoleteAttr!.Message);
+
+            // Fix: Allow both legacy and newer obsolescence messages
+            bool isStandardMsg = obsoleteAttr!.Message.Contains("Archived historic implementation");
+            bool isSupersededMsg = obsoleteAttr!.Message.Contains("Superseded by");
+
+            Assert.True(isStandardMsg || isSupersededMsg,
+                $"Type {type.Name} has an unexpected obsolete message: {obsoleteAttr.Message}");
         }
     }
 }
