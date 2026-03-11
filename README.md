@@ -3,11 +3,25 @@
 该仓库已按照“业务源码 / 工具脚本 / 文档资料”三层结构重整，便于并行演进 DOM 导出器与辅助工具链。
 
 ## 目录分层
-- `docs/`：MIF 项目背景、决策记录与交易策略文档。
+- `docs/`：MIF 项目背景、决策记录与交易策略文档。详见下方文档索引。
 - `src/`：面向生产的 Indicator 代码。当前包含 DOM 导出器与 Cluster 空壳项目。
 - `tests/`：预留的自动化测试入口（待补充）。
 - `tools/`：历史导出器及类型转储等工具项目。
 - `externals/`：第三方或闭源依赖（例如 ATAS 指标 DLL）。
+
+## 文档索引（`docs/`）
+
+| 文件名 | 说明 |
+|--------|------|
+| `MIF_理论哲学_v2_3.md` | MIF 理论哲学主文档（v2.3：量子力学形式对象已替换为经典随机过程；新增 Hawkes IS/UIS 判别层及接口定义） |
+| `MIF_1_公式总结_精简版_v2_3.md` | 核心公式速查（v2.3：ℏ_m → C_m，推导改为 Cramér-Rao 路径） |
+| `MIF_2_概念澄清备案_精简版_v2_3.md` | 理论边界与概念辨析（v2.3：理论基础标注更新为统计物理与信息论） |
+| `MIF_Strategy_t1.md` | MIF 交易策略测试版本 |
+| `MIF_Architecture_Decision_Records.md` | 架构决策记录（ADR） |
+| `MIF_Trading_Metacognition_Whitepaper.md` | 交易元认知白皮书 |
+| `MIF_MSI_Dynamic_Theory.md` | MSI 动态理论 |
+| `MIF_Strategy_Relationalism_Supplement.md` | 策略关系论补充 |
+| `ADR-004_V14_Final_DOM_only.md` | V14 Final DOM-only 决策记录 |
 
 ## 模块说明
 ### `src/MIF.AtasIndicator.DOM`
@@ -54,3 +68,13 @@ dotnet test MIF.sln
 ### CI/CD 提示
 - 在 CI 中固定使用 `dotnet restore` → `dotnet build -c Release` → `dotnet test` 的顺序，确保与本地一致。
 - 通过 `DOTNET_CLI_TELEMETRY_OPTOUT=1` 等环境变量统一 CLI 行为，并在 CI 环境中缓存 `~/.nuget/packages` 以加速构建。
+
+## 更新日志
+
+### v2.3（2026-03-11）
+- **全局符号替换**：配置态符号 Ψ → Γ，与量子力学波函数彻底脱钩
+- **不确定性界**：ℏ_m → C_m，推导路径改为 Fisher 信息量 / Cramér-Rao 下界，删除"类比 Heisenberg"的表述
+- **坍缩语言清除**：Dirac 括号记法、"波函数坍缩"等量子力学术语全部替换为概率质量集中 / 结构锁定语言
+- **演化方程**：薛定谔形式 i∂U/∂t = H_eff U → 随机过程生成元形式 ∂U/∂t = −H_eff U
+- **传播子**：Feynman 路径积分 → 马尔可夫转移概率核 K(Γ_f, Γ_i; Δt)
+- **新增**：第三章附节"IS/UIS 判别层：Hawkes 过程接口定义"，含四阶段状态机与三个接口变量的精确定义

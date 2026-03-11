@@ -1,5 +1,5 @@
 # MIF理论公式总结
-## Market Information Field Theory v2.1 - 核心公式
+## Market Information Field Theory v2.3 - 核心公式
 
 ---
 
@@ -18,7 +18,7 @@
 
 **Configuration**
 ```
-Ψ(t) = {ε(p,s,t) | all p,s}
+Γ(t) = {ε(p,s,t) | all p,s}
 表示完整的DOM能量配置状态
 ```
 
@@ -68,10 +68,10 @@ div J = ∂H_m/∂t - ∂I_em/∂t
 
 ## 2. MIF_CE_ICI新指标体系
 
-### 2.1 结构清晰度 I(Ψ)
+### 2.1 结构清晰度 I(Γ)
 
 ```
-I(Ψ) = I(PoC) × I(VA) × I(u)
+I(Γ) = I(PoC) × I(VA) × I(u)
 
 其中:
 I(PoC) = exp(-σ(PoC)/μ(PoC))  # PoC稳定性
@@ -116,7 +116,7 @@ Phase 2 (Cluster 就绪后):
   E.quality = 0.3×CVD_slope + 0.2×DEPIN + 0.2×large_trade_pct + 0.3×κ
 ```
 
-**注意**：κ 与 Ω 的 ω_t 分量测量不同对象。ω_t 测 Ψ 形态的全局相似度；κ 测单侧存量的恢复速度。两者可以不一致（ω_t 高但 κ 低 = 形状没变但弹性下降）。
+**注意**：κ 与 Ω 的 ω_t 分量测量不同对象。ω_t 测 Γ 形态的全局相似度；κ 测单侧存量的恢复速度。两者可以不一致（ω_t 高但 κ 低 = 形状没变但弹性下降）。
 
 ### 2.3 共振与主导
 
@@ -151,9 +151,11 @@ ICI_new = R × exp(-|D|) × Ω
 
 ### 3.1 测不准原理
 ```
-ΔE × Δt ≥ ℏ_m
+ΔE_emergence × Δt_prediction ≥ C_m
 含义: 能量分辨率与时间分辨率的trade-off
 ```
+
+> （C_m：市场信息常数，由 Fisher 信息量 / Cramér-Rao 下界推导，须按品种经验校准；与量子力学常数无关。）
 
 ### 3.2 信息守恒
 ```
@@ -163,8 +165,8 @@ dI/dt + div(J_I) = S_ext (开系统)
 
 ### 3.3 可识别性判据
 ```
-Fisher信息: I_Fisher(Ψ) = E[(∂logP/∂Ψ)²]
-可识别条件: I(Ψ) > I_critical
+Fisher信息: I_Fisher(Γ) = E[(∂logP/∂Γ)²]
+可识别条件: I(Γ) > I_critical
 ```
 
 ### 3.4 最小结构识别(MSI) - 动态版本
@@ -176,7 +178,7 @@ MSI窗口 = 4-6 bars（假设为常数）
 
 **新版本（当前）**：
 ```
-T*(S,tf,Ψ) = argmax_t {∫[0,t] [Alpha(τ|S,Ψ) - Cost(τ|tf)] dτ}
+T*(S,tf,Γ) = argmax_t {∫[0,t] [Alpha(τ|S,Γ) - Cost(τ|tf)] dτ}
 
 简化形式：
 - 强趋势(S>0.7): T* ≈ 6-10 bars
@@ -212,13 +214,13 @@ T*(S,tf,Ψ) = argmax_t {∫[0,t] [Alpha(τ|S,Ψ) - Cost(τ|tf)] dτ}
 ```python
 # 核心指标
 Ω = compute_coherence(H_m, I_em)
-I(Ψ) = compute_clarity(PoC, VA, u)
+I(Γ) = compute_clarity(PoC, VA, u)
 ICI = compute_ici(I, E, Ω)
 
 # 判断逻辑
 if Ω < Ω_threshold:
     return "UIS: 市场不可读"
-if I(Ψ) < I_threshold:  
+if I(Γ) < I_threshold:  
     return "结构不清晰"
 if abs(ICI) > ICI_threshold:
     return probability_distribution()
@@ -226,7 +228,7 @@ if abs(ICI) > ICI_threshold:
 
 ### Phase 2 (计划)
 - 向量序参量 ∇Ω
-- 多尺度I(Ψ)
+- 多尺度I(Γ)
 - 动态阈值
 
 ### Phase 3 (未来)
@@ -239,11 +241,11 @@ if abs(ICI) > ICI_threshold:
 ## 5. 关键依赖关系
 
 ```
-DOM数据 ──→ ε(p,s,t) ──→ Ψ(t)
+DOM数据 ──→ ε(p,s,t) ──→ Γ(t)
            ↓            ↓
          PoC/VA     H_m, I_em
            ↓            ↓
-         I(Ψ)           Ω
+         I(Γ)           Ω
            ↓            ↓
            └──→ ICI ←──┘
                  ↓
@@ -257,7 +259,7 @@ DOM数据 ──→ ε(p,s,t) ──→ Ψ(t)
 | 符号 | 名称 | 范围 | 用途 |
 |-----|------|------|------|
 | Ω | 相干度 | [0,1] | 市场可读性判断 |
-| I(Ψ) | 结构清晰度 | [0,1] | 结构存在性判断 |
+| I(Γ) | 结构清晰度 | [0,1] | 结构存在性判断 |
 | ρ | 紧迫度比 | (0,∞) | 买卖压力比 |
 | R | 共振强度 | ℝ | 结构-执行同向性 |
 | D | 主导度 | [-1,1] | 谁在主导 |

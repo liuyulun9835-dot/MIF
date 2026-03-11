@@ -776,7 +776,7 @@ def compare_dynamic_vs_fixed(historical_data):
 - 趋势强度分布窄
 - λ和γ相对恒定
 
-则: T*(S, tf, Ψ) ≈ constant ≈ 4-6 bars
+则: T*(S, tf, Γ) ≈ constant ≈ 4-6 bars
 
 动态MSI退化为固定MSI
 ```
