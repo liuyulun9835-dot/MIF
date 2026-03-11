@@ -157,7 +157,7 @@ def detect_bottom_up_emergence():
             return "conditional_tradable", {
                 'max_position': 0.3,  # 降低仓位
                 'max_hold_time': '4h',  # 缩短周期
-                'stop_condition': 'Ω_15m_collapse',
+                'stop_condition': 'Ω_15m_breakdown',
                 'rationale': '赌短期结构能传播到中长期'
             }
     
@@ -180,7 +180,7 @@ class FailureModes:
     开仓前必须预演: 市场如何证明我错?
     """
     scenarios = {
-        "immediate_collapse": "Ω_15m<0.5 in 1h → 立即平仓",
+        "immediate_breakdown": "Ω_15m<0.5 in 1h → 立即平仓",
         "mid_barrier_rejection": "Ω_daily上升但Ω_weekly不动 → 减仓观望",
         "false_propagation": "Ω_daily短暂上升后回落 → 全部平仓",
         "slow_decay": "各级Ω缓慢下降 → 逐步减仓",
@@ -465,7 +465,7 @@ class AdaptivePositionManager:
         "跟随期": {
             "特征": "多尺度全部确认",
             "仓位": "max_position (根据初始状态确定)",
-            "监控": ['任何尺度Ω collapse', '∇Ω反转'],
+            "监控": ['任何尺度Ω breakdown', '∇Ω反转'],
             "转移": {
                 '任何Ω < critical': '→ 撤退期',
             }
@@ -736,7 +736,7 @@ class UnexpectedMonitor:
         
         "不应该4": {
             "条件": "多尺度Ω全部>0.7",
-            "不应该": "隔天全部collapse",
+            "不应该": "隔天全部breakdown",
             "如果发生": "存在未观测的regime shift机制",
             "严重度": "HIGH",
         },
@@ -1103,7 +1103,7 @@ def handle_paradigm_crisis(crisis_signals):
 |-----|------------|----------|
 | **阈值** | Ω > 0.8就交易 | Ω相对于自身历史异常高 |
 | **时间框架** | 15m信号直接交易 | 多尺度递归验证 |
-| **风险控制** | 固定止损位 | 根据Ω collapse动态止损 |
+| **风险控制** | 固定止损位 | 根据Ω breakdown动态止损 |
 | **仓位管理** | 固定配置 | 置信度即仓位 |
 | **策略评估** | 盈亏结果 | 决策过程质量 |
 
