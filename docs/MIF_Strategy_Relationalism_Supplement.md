@@ -213,6 +213,7 @@ Cluster_levels = 20  # 固定
 | 动态优于静态 | dΩ/dt, d²Ω/dt² | Ω轨迹评分 |
 | 动态优于静态 | dE/dt | Belief-led确认 |
 | 矢量优于标量 | E = (dir, mag, qual) | E定义 |
+| 窗口优于瞬时 | κ 定义 | 用 W=12 窗口自相关而非单 bar DOM 变化量 |
 | 分布优于期望 | confidence ∈ [0,1] | 置信度系统 |
 | 窗口优于瞬时 | std_M(POC), std_M(u) | I(Ψ)计算 |
 | 相位优于幅度 | R = z(I)×z(E) | 共振强度 |
@@ -232,6 +233,7 @@ Cluster_levels = 20  # 固定
 ```
 Phase 1（V14_Final, DOM-only, 冻结参数）：完成分位数门控与导数窗口文档化；E 暂用二维 (direction, magnitude)；quality 留空占位。
 高优先级
+□ 实现 κ (DOM Resilience) 作为 E.quality 的 Phase 1 代理（仅需 DOM 数据）
 □ 明确所有未定义的threshold (用quantile)
 □ 统一所有硬阈值为分位数 (D, divergence, u_edge)
 □ 明确所有窗口参数 (文档化W=5, M=12等)
