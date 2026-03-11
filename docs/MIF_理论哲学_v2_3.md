@@ -1,4 +1,4 @@
-# Market Information Field Theory v2.1
+# Market Information Field Theory v2.3
 ## 从参与者能量到概率涌现：一个承认认知边界的场论框架
 
 > **Covariance, Background Independence, and Epistemic Humility**
@@ -16,7 +16,7 @@
 理论量不显含price
 
 形式表述：
-演化方程 dΨ/dt = F[Ψ, ∂Ψ/∂t]
+演化方程 dΓ/dt = F[Γ, ∂Γ/∂t]
 F不依赖price坐标
 ```
 
@@ -48,14 +48,14 @@ div J = ∂H_m/∂t - ∂I_em/∂t = S_ext
 
 **陈述**：
 ```
-对于任意market configuration Ψ：
+对于任意market configuration Γ：
 
-ΔE_emergence × Δt_prediction ≥ ℏ_m
+ΔE_emergence × Δt_prediction ≥ C_m
 
 其中：
 ΔE_emergence：涌现能量的标准差
 Δt_prediction：预测时间窗口
-ℏ_m：市场普朗克常数（empirical确定）
+C_m：市场信息常数（empirical确定）
 ```
 
 **物理意义**：
@@ -166,11 +166,11 @@ K(τ)：Kolmogorov复杂度
 1. 可识别态（Identifiable State, IS）
 2. 不可识别态（Unidentifiable State, UIS）
 
-且：存在可计算量I(Ψ(t))，使得
+且：存在可计算量I(Γ(t))，使得
 I > I_critical → IS
 I ≤ I_critical → UIS
 
-关键：我们假设能够通过观测I(Ψ)判断当前处于哪种态
+关键：我们假设能够通过观测I(Γ)判断当前处于哪种态
 ```
 
 **这是理论的根本假设**：
@@ -190,16 +190,16 @@ I ≤ I_critical → UIS
 
 ```
 定义：
-Configuration Ψ处于IS ⟺
+Configuration Γ处于IS ⟺
 
 1. 信息不确定度：
-   H[P(event|Ψ)] < H_critical
+   H[P(event|Γ)] < H_critical
    
 2. Fisher信息：
-   I_Fisher(Ψ) = E[(∂log P/∂Ψ)²] > I_critical
+   I_Fisher(Γ) = E[(∂log P/∂Γ)²] > I_critical
    
 3. 有效维度：
-   d_eff(Ψ) = exp(H[Ψ]) < d_critical
+   d_eff(Γ) = exp(H[Γ]) < d_critical
 
 物理意义：
 - Configuration的熵低（有序）
@@ -211,15 +211,15 @@ Configuration Ψ处于IS ⟺
 
 ```
 定义：
-Configuration Ψ处于UIS ⟺
+Configuration Γ处于UIS ⟺
 
-1. H[P(event|Ψ)] ≈ log(N_event)
+1. H[P(event|Γ)] ≈ log(N_event)
    事件概率接近均匀分布
    
-2. I_Fisher(Ψ) ≈ 0
+2. I_Fisher(Γ) ≈ 0
    对参数不敏感
    
-3. d_eff(Ψ) ≈ d_max
+3. d_eff(Γ) ≈ d_max
    Configuration充满空间（不可压缩）
 
 物理意义：
@@ -230,14 +230,14 @@ Configuration Ψ处于UIS ⟺
 
 ---
 
-### 可识别度I(Ψ)的定义
+### 可识别度I(Γ)的定义
 
 **方案A：基于Fisher信息**：
 
 ```
-I(Ψ) = I_Fisher(Ψ) / I_max
+I(Γ) = I_Fisher(Γ) / I_max
 
-I_Fisher = ∫ (∂log P(event|Ψ)/∂Ψ)² P(Ψ) dΨ
+I_Fisher = ∫ (∂log P(event|Γ)/∂Γ)² P(Γ) dΓ
 
 归一化：I ∈ [0, 1]
 ```
@@ -245,7 +245,7 @@ I_Fisher = ∫ (∂log P(event|Ψ)/∂Ψ)² P(Ψ) dΨ
 **方案B：基于预测熵**：
 
 ```
-I(Ψ) = 1 - H[P(event|Ψ)] / H_max
+I(Γ) = 1 - H[P(event|Γ)] / H_max
 
 H[P] = -Σ P(event_i) log P(event_i)
 
@@ -256,7 +256,7 @@ I低 → 预测分布平坦（不可识别）
 **方案C：综合度量**：
 
 ```
-I(Ψ) = w₁ × I_Fisher_norm + 
+I(Γ) = w₁ × I_Fisher_norm + 
        w₂ × (1 - H_norm) + 
        w₃ × (1 - d_eff_norm)
 
@@ -272,7 +272,7 @@ I(Ψ) = w₁ × I_Fisher_norm +
 
 ```
 如果：
-1. I(Ψ)与prediction accuracy无相关
+1. I(Γ)与prediction accuracy无相关
    corr(I, accuracy) < 0.1
    
 2. 或"高I"时预测不优于"低I"时
@@ -292,6 +292,47 @@ I(Ψ) = w₁ × I_Fisher_norm +
 - 改为blind prediction
 - 或承认理论仅适用于特定regime
 ```
+
+---
+
+### 三（附）— IS/UIS 判别层：Hawkes 过程接口定义
+
+MIF 框架的上层为状态识别框架（Ω / I(Γ) / IS-UIS），其下引入一个**判别层**，专门用于区分突破信号的真阳性与假阳性。该判别层以自激泊松过程（Hawkes 过程）为标准工具。
+
+**分层结构：**
+
+```
+上层：状态识别框架
+  输入：Γ(t)（DOM 完整能量配置状态）
+  计算：Ω（相干度）、I(Γ)（信息熵）
+  输出：{UIS，IS 候选，IS 误判区}
+
+        ↕ 接口变量：突破事件流 {t_i} + 分支比 n
+
+下层：Hawkes 判别层
+  输入：Ω 越过临界阈值 θ_crit 的事件时刻序列 {t_i}
+  模型：λ(t) = μ + Σ_{t_i < t} α · exp(−β(t − t_i))
+  核心统计量：分支比 n = α / β
+```
+
+**判别规则（接口定义）：**
+
+| 市场阶段 | 统计检验基准 | Hawkes 特征 | MIF 状态输出 |
+|---|---|---|---|
+| 盘整期（Baseline） | 方差比 VR(q) ≈ 1，自相关 ρ ≈ 0 | 齐次泊松 + 鞅：E[X_{t+1} \| F_t] = X_t | UIS（不准交易） |
+| 假阳性（False Break） | 瞬间偏离后迅速回归，VR(q) 均值回归 | 次临界 Hawkes：n ≪ 1 | IS 误判区（立刻否决） |
+| 真阳性（True Break） | VR(q) > 1，强正序列自相关 | 超临界 Hawkes：n ≥ 1 | IS（允许顺势入场） |
+| 再平衡（Rebalancing） | 趋势项衰减为 0，鞅条件重新成立 | Hawkes 衰减 → 泊松：λ(t) → μ | IS → UIS（平仓离场） |
+
+**接口变量的精确对应：**
+
+- **突破事件 {t_i}**：定义为 Ω(t) 越过分位数阈值 θ_crit 的时刻，由上层状态识别框架输出，作为 Hawkes 层的事件流输入。
+- **分支比 n = α/β**：Hawkes 层的核心输出统计量。n ≥ 1 表示自激放大（真突破，进入 IS）；n ≪ 1 表示快速衰减（假突破，IS 误判区，否决）。
+- **强度衰减 λ(t) → μ**：动能耗尽信号，触发 IS → UIS 状态切换（离场依据）。
+
+**重要约束：**
+
+> Hawkes 判别层仅对**已被上层识别为 IS 候选**的事件启动计算。盘整期（UIS 阶段）不运行 Hawkes 模型。该层不替代状态识别框架，不直接进入实时交易执行逻辑，仅输出判别信号供决策层参考。
 
 ---
 
@@ -324,18 +365,18 @@ T：time
 
 ### Level 1：Configuration
 
-**Ψ(t) - 能量位形**
+**Γ(t) - 能量位形**
 
 ```
 定义：
-Ψ(t) = {ε(p,s,t) | ∀p∈M, s∈{buy,sell}}
+Γ(t) = {ε(p,s,t) | ∀p∈M, s∈{buy,sell}}
 
 Configuration space：
-C = {Ψ | Σε < ∞}
+C = {Γ | Σε < ∞}
 
 度量：
-d(Ψ₁, Ψ₂) = ||Ψ₁ - Ψ₂||₂
-内积：⟨Ψ₁, Ψ₂⟩ = Σ_p,s ε₁(p,s)ε₂(p,s)
+d(Γ₁, Γ₂) = ||Γ₁ - Γ₂||₂
+内积：⟨Γ₁, Γ₂⟩ = Σ_p,s ε₁(p,s)ε₂(p,s)
 
 C是Hilbert space
 ```
@@ -348,7 +389,7 @@ C是Hilbert space
 
 ```
 定义：
-H_m[Ψ] = -Σ_p P(p) log P(p)
+H_m[Γ] = -Σ_p P(p) log P(p)
 
 其中：
 P(p) = [ε(p,buy) + ε(p,sell)] / Σ_p[ε(p,buy) + ε(p,sell)]
@@ -366,7 +407,7 @@ H_m低：集中（有序）
 
 ```
 定义：
-I_em[Ψ] = H[ε_buy] + H[ε_sell] - H[ε_buy, ε_sell]
+I_em[Γ] = H[ε_buy] + H[ε_sell] - H[ε_buy, ε_sell]
 
 离散化后计算：
 bins = 5-10
@@ -409,13 +450,13 @@ I_em低：decorrelated
 
 ```
 定义：
-Ω[Ψ; {Ψ(t-k)}] = [ω_s × ω_t × ω_p]^(1/3)
+Ω[Γ; {Γ(t-k)}] = [ω_s × ω_t × ω_p]^(1/3)
 
 Component 1 - 空间相干度：
 ω_s = 1 - H_m / log(n_levels)
 
 Component 2 - 时间相干度：
-ω_t = Σ_{k=1}^K w_k × ⟨Ψ(t), Ψ(t-k)⟩ / ||Ψ(t)|| ||Ψ(t-k)||
+ω_t = Σ_{k=1}^K w_k × ⟨Γ(t), Γ(t-k)⟩ / ||Γ(t)|| ||Γ(t-k)||
 
 权重：
 w_k = exp(-k/τ) / Z
@@ -529,7 +570,7 @@ OP（Overload Primitive）：
 性质：
 - 微观：单bar级
 - 瞬时：不考虑持续性
-- 确定性可计算：给定Ψ → 唯一primitive
+- 确定性可计算：给定Γ → 唯一primitive
 - 不直接涌现：大多数衰减消失
 ```
 
@@ -542,18 +583,18 @@ OP（Overload Primitive）：
 **世界观**：
 
 ```
-市场在任意时刻同时处于多种"可能涌现状态"的叠加
+市场在任意时刻同时处于多种"可能涌现状态"的概率混合
 
 未观测前：
-|Ψ_market⟩ = Σ_i α_i |Event_i⟩
+Γ_market 由概率分布 {P_i} 描述
 
 其中：
 Event_i ∈ {Balance, Imbalance_buy, Imbalance_sell, ...}
-|α_i|²：该事件的"涌现概率"
+P_i：该事件的涌现概率
 
 观测（足够长时间窗口后）：
-波函数坍缩到某个本征态
-P(Event_i observed) = |α_i|²
+概率质量集中到某个事件态
+P(Event_i observed) = P_i
 ```
 
 **事件元的作用**：
@@ -562,26 +603,26 @@ P(Event_i observed) = |α_i|²
 不是"cause"
 是"modulator"
 
-事件元序列 → 影响α_i(t)的演化
-但不决定最终坍缩结果
-坍缩本质是概率性的
+事件元序列 → 影响P_i(t)的演化
+但不决定最终锁定结果
+锁定本质是概率性的
 ```
 
 ---
 
 ### 5.2 涌现概率的演化方程
 
-**形式1：Lindblad-like Master Equation**
+**形式1：Master Equation（马尔可夫链形式）**
 
 ```
-dρ/dt = -i[H_eff, ρ] + Σ_k (L_k ρ L_k† - 1/2{L_k†L_k, ρ})
+dP_i/dt = Σ_j Q_ij P_j
 
 其中：
-ρ：涌现态的密度矩阵
-H_eff：有效哈密顿量（从事件元序列构造）
-L_k：Lindblad算符（退相干项）
+P_i：涌现态 i 的概率
+Q_ij：从态 j 到态 i 的转移速率矩阵
+约束：Σ_i Q_ij = 0（概率守恒）
 
-P(Event_i) = ⟨Event_i|ρ|Event_i⟩
+P(Event_i) = P_i(t)
 ```
 
 **形式2：Stochastic Differential Equation**
@@ -601,15 +642,15 @@ f(Primitives)：事件元调制函数
 归一化：Σ_i P_i = 1
 ```
 
-**形式3：Path Integral**
+**形式3：转移概率核**
 
 ```
-P(Event_i at t) = ∫ D[Path] exp(iS[Path]) δ(Path(t) = Event_i)
+P(Event_i at t) = Σ_j K(Event_i, Event_j; Δt) P(Event_j, t-Δt)
 
-S[Path]：作用量泛函
-∫ D[Path]：对所有可能路径求和
+K(Event_i, Event_j; Δt)：马尔可夫转移概率核
+满足 Σ_i K(Event_i, Event_j; Δt) = 1
 
-类似Feynman路径积分
+在连续极限下可通过 Kramers-Moyal 展开得到对应的 Fokker-Planck 方程
 ```
 
 ---
@@ -693,45 +734,45 @@ f_F = A(t) sin(ω_ext t + φ_ext) × g(Primitives)
 A(t)：调制振幅
 
 当ω_ext ≈ ω_natural（内禀频率）：
-共振 → P_i剧烈波动 → 易坍缩
+共振 → P_i剧烈波动 → 易锁定
 ```
 
 ---
 
-### 5.4 坍缩机制
+### 5.4 结构锁定机制
 
-**坍缩条件**：
+**锁定条件**：
 
 ```
 当满足以下之一：
 
 1. 概率梯度超阈值：
    |dP_i/dt| > Γ_critical
-   
+
 2. 涨落振幅超阈值：
    σ(P_i) > σ_critical
-   
+
 3. 能量窗口累积足够：
    ∫_{t-T}^t |dΩ/dt|² dt > E_barrier
-   
+
 4. 外部shock：
    |S_ext| > S_critical
 
-→ 坍缩发生
+→ 概率质量集中发生
 ```
 
-**坍缩后状态**：
+**锁定后状态**：
 
 ```
 选择规则：
-P(坍缩到Event_i) = |α_i(t_collapse)|²
+P(集中到Event_i) = P_i(t_lock)
 
-坍缩不是瞬时的：
-有characteristic time τ_collapse
-在τ内，P_i: α_i² → 0 or 1
+锁定不是瞬时的：
+有characteristic time τ_lock
+在τ内，P_i → 0 or 1
 
-坍缩后：
-新的叠加态开始形成
+锁定后：
+新的概率混合态开始形成
 周期性过程
 ```
 
@@ -739,7 +780,7 @@ P(坍缩到Event_i) = |α_i(t_collapse)|²
 
 ### 5.5 涌现事件的分类（Empirical）
 
-这些是可能的坍缩本征态，需要验证是否真实存在
+这些是可能的锁定事件态，需要验证是否真实存在
 
 **Balance（平衡）**
 
@@ -799,7 +840,7 @@ Volume：来回切换
 **度量张量**：
 
 ```
-g_μν(Ψ) = ⟨∂_μΨ, ∂_νΨ⟩
+g_μν(Γ) = ⟨∂_μΓ, ∂_νΓ⟩
 
 定义Configuration space上的距离
 允许定义测地线、曲率
@@ -833,27 +874,28 @@ Overload事件 ⟺ 拓扑改变
 **时间演化**：
 
 ```
-Ψ(t) = U(t, t₀) Ψ(t₀)
+Γ(t) = U(t, t₀) Γ(t₀)
 
 U：演化算符
 
-Schrödinger-like：
-i∂U/∂t = H_eff U
+生成元形式：
+∂U/∂t = -H_eff U
 
-H_eff = H_0 + V[Ψ] + S_ext
+H_eff = H_0 + V[Γ] + S_ext
 ```
 
-**Propagator**：
+> （生成元形式。U(t) 为 DOM 能量配置场的转移半群，H_eff 为有效耗散算子。此形式与马尔可夫随机过程的生成元结构一致，不含虚数单位 i，无量子力学含义。）
 
 ```
-K(Ψ_f, t_f; Ψ_i, t_i) = ⟨Ψ_f|U(t_f, t_i)|Ψ_i⟩
-
-形式上：
-K = ∫ D[Ψ] exp(iS[Ψ])
-
-S[Ψ]：作用量
-需要从数据学习
 ```
+
+**Propagator（转移概率核）**：
+
+```
+K(Γ_f, Γ_i; Δt) = P(Γ(t + Δt) = Γ_f | Γ(t) = Γ_i)
+```
+
+> K 在此定义为马尔可夫转移概率核。在连续极限下，可通过 Kramers-Moyal 展开得到对应的 Fokker-Planck 方程；在离散实现中，K 直接由历史 DOM 快照的条件频率估计，无需解析形式。
 
 ---
 
@@ -862,12 +904,13 @@ S[Ψ]：作用量
 **Fisher Information Matrix**：
 
 ```
-I_μν = ∫ [∂_μ log P(event|Ψ)] [∂_ν log P(event|Ψ)] P(Ψ) dΨ
+I_μν = ∫ [∂_μ log P(event|Γ)] [∂_ν log P(event|Γ)] P(Γ) dΓ
+
 
 I的迹：tr(I) = 总Fisher信息
 
 可识别度：
-I_identifiable(Ψ) = tr(I(Ψ)) / tr(I_max)
+I_identifiable(Γ) = tr(I(Γ)) / tr(I_max)
 ```
 
 **Cramér-Rao Bound**：
@@ -888,7 +931,7 @@ Configuration space上的自然度量：
 g_μν^Fisher = I_μν
 
 测地线距离：
-d_Fisher(Ψ₁, Ψ₂) = ∫ √(g_μν dx^μ dx^ν)
+d_Fisher(Γ₁, Γ₂) = ∫ √(g_μν dx^μ dx^ν)
 
 可识别态：
 靠近low-dimensional流形
@@ -903,30 +946,21 @@ Fisher距离长
 
 ### 6.4 测不准关系的数学基础
 
-**推导（类似Heisenberg）**：
+**推导（基于 Cramér-Rao 下界）**：
+
+> 此不等式的推导路径不依赖量子力学。设市场状态参数 θ（如价格涌现幅度）的无偏估计量为 θ̂，由 Cramér-Rao 下界，其估计方差满足：
+>
+> Var(θ̂) ≥ 1 / I(θ)
+>
+> 其中 I(θ) 为 Fisher 信息量。将预测窗口 Δt 视为有效观测样本量的代理变量，信息量 I(θ) ∝ Δt，则估计精度（即 ΔE_emergence 的下界）与 Δt 之间存在反比约束，由此得到上述信息论不确定性界。C_m 为市场信息常数，无普适值，须按交易品种由历史 DOM 数据经验校准。
+
+**C_m的物理意义**：
 
 ```
-设A和B是两个不对易算符：
-[A, B] = iC
-
-则：
-ΔA × ΔB ≥ |⟨C⟩| / 2
-
-对市场：
-A = Energy (E_emergence)
-B = Time (t_prediction)
-[A, B] = i(∂/∂t)
-
-→ ΔE × Δt ≥ ℏ_m
-```
-
-**ℏ_m的物理意义**：
-
-```
-ℏ_m = Configuration space中的"量子化单元"
+C_m = Configuration space中的信息约束常数
 
 可以从数据估计：
-ℏ_m ≈ ⟨ΔE⟩ × ⟨Δt⟩_minimum
+C_m ≈ ⟨ΔE⟩ × ⟨Δt⟩_minimum
 在最优预测条件下
 ```
 
@@ -948,7 +982,7 @@ B = Time (t_prediction)
 
 ### 7.1 H0的验证
 
-**Step 1：构造I(Ψ)**
+**Step 1：构造I(Γ)**
 
 ```
 选择方案（A/B/C）
@@ -958,8 +992,8 @@ B = Time (t_prediction)
 **Step 2：分组测试**
 
 ```
-IS_group：I(Ψ) > I_critical
-UIS_group：I(Ψ) ≤ I_critical
+IS_group：I(Γ) > I_critical
+UIS_group：I(Γ) ≤ I_critical
 
 计算：
 AUC_IS：在IS_group的预测精度
@@ -987,7 +1021,7 @@ p < 0.05 → 拒绝null → H0成立
 
 ```
 如果p > 0.05：
-尝试不同的I(Ψ)定义
+尝试不同的I(Γ)定义
 或调整I_critical
 若仍失败 → H0被证伪
 ```
@@ -1050,11 +1084,11 @@ y轴：Δt
 ΔE × Δt = C
 
 检验：
-C是否是常数（与Ψ无关）
+C是否是常数（与Γ无关）
 C > 0（不等式成立）
 
-估计ℏ_m：
-ℏ_m ≈ min(ΔE × Δt)
+估计C_m：
+C_m ≈ min(ΔE × Δt)
 ```
 
 **违反测不准的情况**：
@@ -1092,7 +1126,7 @@ C > 0（不等式成立）
 ✅ 在UIS态：知道无法预测
    不发出信号或给出均匀分布
    
-✅ I(Ψ)有区分度：
+✅ I(Γ)有区分度：
    corr(I, accuracy) > 0.3
    
 ✅ 至少一个触发假设有效：
@@ -1191,7 +1225,7 @@ DOM数据稀疏
 **基本量**：
 ```
 ε(p,s,t)：能量
-Ψ(t) = {ε}：Configuration
+Γ(t) = {ε}：Configuration
 H_m = -Σ p log p：结构熵
 I_em：互信息
 φ：相位差
@@ -1201,7 +1235,7 @@ I_em：互信息
 ```
 Ω = [ω_s × ω_t × ω_p]^(1/3)
 ω_s = 1 - H_m/H_max
-ω_t = Σ w_k ⟨Ψ(t), Ψ(t-k)⟩
+ω_t = Σ w_k ⟨Γ(t), Γ(t-k)⟩
 ω_p = α(I_em/log n) + (1-α)(1+cos φ)/2
 ```
 
@@ -1221,13 +1255,13 @@ OP: |dΩ/dt|>ε_c
 
 **可识别度**：
 ```
-I(Ψ) = tr(I_Fisher(Ψ)) / tr(I_max)
-或 I = 1 - H[P(event|Ψ)]/H_max
+I(Γ) = tr(I_Fisher(Γ)) / tr(I_max)
+或 I = 1 - H[P(event|Γ)]/H_max
 ```
 
 **测不准**：
 ```
-ΔE_emergence × Δt_prediction ≥ ℏ_m
+ΔE_emergence × Δt_prediction ≥ C_m
 ```
 
 **概率演化**：
@@ -1252,13 +1286,13 @@ dP_i/dt = f(Primitives, Ω, div J) + noise
 ### 最优响应时间的数学形式
 
 ```
-T*(S, tf, Ψ) = argmax_t {∫[0,t] [Alpha(τ|S,Ψ) - Cost(τ|tf)] dτ}
+T*(S, tf, Γ) = argmax_t {∫[0,t] [Alpha(τ|S,Γ) - Cost(τ|tf)] dτ}
 
 其中：
 - S: 趋势强度（背景独立的相对度量）
 - tf: 时间框架
-- Ψ: 结构条件（Ω, I, E等）
-- Alpha(τ|S,Ψ): 级联收益累积函数
+- Γ: 结构条件（Ω, I, E等）
+- Alpha(τ|S,Γ): 级联收益累积函数
 - Cost(τ|tf): 成本累积函数
 ```
 
@@ -1351,7 +1385,7 @@ S = weighted_average({
 v2.1：明确"只在IS态能预测"
 
 确定性理论：事件是确定的
-v2.1：事件是概率叠加态的坍缩
+v2.1：事件是概率混合态的结构锁定
 
 确定性理论：单一累积模型
 v2.1：六种假设，模型选择
@@ -1362,7 +1396,7 @@ v2.1：六种假设，模型选择
 旧理论：缺少测不准原理
 v2.1：作为基本定理
 
-旧理论：I(Ψ)未定义
+旧理论：I(Γ)未定义
 v2.1：严格数学定义
 
 旧理论：概率性未形式化
@@ -1380,10 +1414,10 @@ v2.1：分IS和UIS两套标准, 主要验证对环境的适应性和对漂移的
 
 ---
 
-**版本**：v2.1  
-**日期**：2024-11-04  
-**状态**：Current Framework with Epistemic Boundaries  
-**核心创新**：H0假设 + 测不准定理 + 概率叠加框架  
+**版本**：v2.3
+**日期**：2026-03-11
+**状态**：Current Framework with Epistemic Boundaries
+**核心创新**：H0假设 + 信息论不确定性界 + 概率混合框架 + Hawkes IS/UIS 判别层
 **基于**：Covariance + Background Independence + Epistemic Humility
 
 ---

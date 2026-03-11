@@ -36,15 +36,15 @@
 
 ### 2.1 DOM (Depth of Market) 数据
 
-**用途**: 计算Ω, I(Ψ), E的DOM代理
+**用途**: 计算Ω, I(Γ), E的DOM代理
 
 **必须字段**:
 
 | 字段名 | 类型 | 维度 | 说明 | 用于计算 |
 |--------|------|------|------|---------|
 | `timestamp` | ISO8601 string | - | Bar的UTC时间戳 | 时间对齐 |
-| `ask_volumes` | decimal[] | [20] | 每层卖方挂单量 | ε, Ω, I(Ψ) |
-| `bid_volumes` | decimal[] | [20] | 每层买方挂单量 | ε, Ω, I(Ψ) |
+| `ask_volumes` | decimal[] | [20] | 每层卖方挂单量 | ε, Ω, I(Γ) |
+| `bid_volumes` | decimal[] | [20] | 每层买方挂单量 | ε, Ω, I(Γ) |
 | `price_levels` | decimal[] | [20] | 每层价格 (仅作label) | POC/VA定位 |
 
 **可选字段** (用于高级分析):
@@ -1056,10 +1056,10 @@ sellVolume = info.Bid; // 卖方成交量 (吃掉了买盘)
 | 标准符号 | 全称 | 定义 |
 |---------|------|------|
 | **ε** | epsilon能量 | DOM层级能量配置 |
-| **Ψ** | Configuration | 完整DOM状态集合 |
+| **Γ** | Configuration | 完整DOM状态集合 |
 | **Ω** | Omega相干度 | 市场可读性[0,1] |
 | **ρ** | rho紧迫度比 | u_buy/u_sell |
-| **I(Ψ)** | 结构清晰度 | POC稳定性指标 |
+| **I(Γ)** | 结构清晰度 | POC稳定性指标 |
 
 ---
 
