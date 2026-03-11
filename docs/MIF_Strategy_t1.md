@@ -259,14 +259,38 @@ quality: 能否覆盖成本 (新增)
 
 **质量计算**:
 ```python
+# Phase 1 (DOM-only, V14_Final):
+quality = κ  # 唯一可用的质量代理
+
+# Phase 2 (Cluster 就绪后):
 quality = (
-    0.4 × CVD_slope +      # 累积压力斜率
-    0.3 × DEPIN +          # 单位成交的方向性
-    0.3 × large_trade_pct  # 大单占比
+    0.3 × CVD_slope +       # 进攻持续性
+    0.2 × DEPIN +            # 进攻集中度
+    0.2 × large_trade_pct +  # 进攻机构参与度
+    0.3 × κ                  # 防守弹性（低 κ = 对手回填强 = 推力易被吸收）
 )
+
+# κ 定义:
+# κ = min(autocorr(Σ ask_vol, lag=1, W=12), autocorr(Σ bid_vol, lag=1, W=12))
 
 # 归一化到 [0,1]
 quality_normalized = percentile_rank(quality)
+```
+
+注意：在 E.quality 中，κ 的解读方向需要明确：
+- 对于 Belief-led（进攻主导）信号：我们希望**对手侧 κ 低**（防守弱 = 推力容易走出去）
+- 对于 Structure-led（结构主导）信号：我们希望**结构侧 κ 高**（结构稳固 = 回归力强）
+
+因此在不同模式中 κ 的使用方向不同：
+```python
+# Belief-led: 看对手侧的弱度
+if direction == "buy":
+    κ_relevant = 1 - κ_ask  # ask 侧弹性低 = 卖方防守弱 = 有利
+elif direction == "sell":
+    κ_relevant = 1 - κ_bid
+
+# Structure-led: 看结构侧的强度
+κ_relevant = κ  # 直接使用（高 = 结构稳固）
 ```
 
 **阶段3: 动态门控 (置信度系统)**
@@ -498,7 +522,7 @@ D = (|z(I(Ψ))| - |z(E)|) / (|z(I(Ψ))| + |z(E)|)  (主导度)
 置信度:
 - 基础: 0.6
 - I(Ψ) > q75: +0.1
-- absorption高 (DOM抵抗力强): +0.2
+- κ > quantile(κ, 0.75) (DOM弹性强): +0.2
 ```
 
 ⚠️ **点判断风险**:
@@ -982,7 +1006,7 @@ E.quality必须预测能覆盖此成本
 | **CVD_slope** | CVD斜率 | (CVD[-1] - CVD[-5]) / 5 | E.quality |
 | **DEPIN** | 归一化方向性 | delta / sqrt(volume) | E.quality |
 | **large_trade_pct** | 大单占比 | (vol > q90).count() / n | E.quality |
-| **absorption** | 吸收强度 | DOM变化 / 成交量 | Structure-led置信度 |
+| **κ (DOM Resilience)** | 防守弹性 | min(autocorr(Σask_vol, lag=1, W=12), autocorr(Σbid_vol, lag=1, W=12)) | E.quality 分量 + Structure-led 置信度 |
 
 ### 7.4 禁止使用的混淆术语
 
@@ -1133,6 +1157,11 @@ CVD = cumsum(delta_trade)
 E.direction = sgn(delta_trade)
 E.magnitude = |z(delta_trade)|
 E.quality = 0.4×CVD_slope + 0.3×DEPIN + 0.3×large_trade_pct
+
+# κ (DOM Resilience) — Phase 1 即可用
+κ_ask = autocorr(sum(ask_volumes), lag=1, W=12)
+κ_bid = autocorr(sum(bid_volumes), lag=1, W=12)
+κ = min(κ_ask, κ_bid)
 ```
 
 **动力学量 (一阶/二阶: 导数)**:

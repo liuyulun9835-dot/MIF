@@ -93,6 +93,31 @@ E = Σ_p cluster_delta(p) × cluster_volume(p)
 E_proxy = Σ (realized_buy - realized_sell) × total_volume
 ```
 
+### 2.2.1 防守弹性 κ（DOM Resilience）
+
+> Phase 1（V14_Final DOM-only）即可计算，不依赖 Cluster。
+
+```
+κ_ask = autocorr(Σ ask_volumes[0:20], lag=1, W=12)
+κ_bid = autocorr(Σ bid_volumes[0:20], lag=1, W=12)
+κ = min(κ_ask, κ_bid)
+
+含义: DOM 存量在 bar 间的自相关性
+      高 κ = 被吃单后快速回填（高弹性）
+      低 κ = 流动性撤退（低弹性）
+```
+
+**E.quality 分阶段定义**:
+```
+Phase 1 (DOM-only):
+  E.quality_proxy = κ  （唯一可用的质量度量）
+
+Phase 2 (Cluster 就绪后):
+  E.quality = 0.3×CVD_slope + 0.2×DEPIN + 0.2×large_trade_pct + 0.3×κ
+```
+
+**注意**：κ 与 Ω 的 ω_t 分量测量不同对象。ω_t 测 Ψ 形态的全局相似度；κ 测单侧存量的恢复速度。两者可以不一致（ω_t 高但 κ 低 = 形状没变但弹性下降）。
+
 ### 2.3 共振与主导
 
 **标准化**:
@@ -237,6 +262,7 @@ DOM数据 ──→ ε(p,s,t) ──→ Ψ(t)
 | R | 共振强度 | ℝ | 结构-执行同向性 |
 | D | 主导度 | [-1,1] | 谁在主导 |
 | ICI | 相位一致度 | ℝ | 综合信号强度 |
+| κ | DOM弹性 | [-1,1] | 防守侧回复能力 |
 
 **注意**: 
 - 所有公式保持背景独立(不依赖绝对价格)

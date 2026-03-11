@@ -63,7 +63,8 @@ Layer 3 (相位层): R/D (共振/主导) - 结构如何被推进?
 ### E三维化(核心创新)
 - `direction`: 推动方向 = sgn(delta_trade)
 - `magnitude`: 推动强度 = |z(delta_trade)|
-- `quality`: 推动质量 = f(CVD_slope, DEPIN, large_trade)
+- `quality`: 推动质量 = f(CVD_slope, DEPIN, large_trade, **κ**)
+  - Phase 1 (DOM-only): quality ≈ κ
 
 ---
 

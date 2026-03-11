@@ -657,6 +657,7 @@ window = "15m"  # 永远
 | ADR-003 | 固定30m窗口 | ⚠️ Deferred | 2025-11-09 |
 | ADR-004 | V14_Final封装(DOM-only) | ✅ Accepted | 2025-11-12 |
 | ADR-005 | MSI多尺度追踪 | 🔄 Proposed | 2025-11-13 |
+| ADR-006 | κ (DOM Resilience) | 🔄 Proposed | 2026-03-11 |
 
 ---
 
@@ -832,4 +833,46 @@ T*(S, tf, Ψ) = argmax_t {∫[0,t] [Alpha(τ|S,Ψ) - Cost(τ|tf)] dτ}
 
 ### 依赖
 需要V14_Final数据支持验证
+
+---
+
+## ADR-006: 引入 κ（DOM Resilience）作为 E.quality 防守侧分量
+
+**日期**: 2026-03-11
+**状态**: 🔄 Proposed
+**决策者**: Severi + Claude
+
+### 上下文
+E.quality 当前定义（CVD_slope, DEPIN, large_trade_pct）仅测量进攻侧行为。
+Phase 1 回测显示 80% 信号被成本磨损，部分原因是"推力够强但对手回填更快"的场景未被过滤。
+现有框架中 Ω 的 ω_t 分量间接测量了 DOM 稳定性，但未按侧分离，且被 Ω 的几何平均稀释。
+
+### 决策
+引入 κ = min(autocorr(Σask_vol), autocorr(Σbid_vol))，W=12, lag=1。
+- Phase 1: κ 作为 E.quality 的唯一可用代理
+- Phase 2: κ 作为 E.quality 的第四个分量（权重 0.3）
+
+### 理由
+1. 仅需 V14_Final DOM-only 数据，无新数据依赖
+2. 填补 E 三维向量中"只测进攻不测防守"的结构性盲区
+3. 计算简单（单行 pandas 代码），不增加显著复杂度
+4. 与 ω_t 测量对象不同（单侧存量 vs 全局形态），不造成理论冗余
+
+### 后果
+**正面**: Phase 1 即有 quality 过滤能力；Belief-led 和 Structure-led 模式可以分别使用 κ 的不同方向
+**负面**: 新增一个参数（W=12）；需验证 κ 确实与后续收益相关
+
+### 验证方法
+- [ ] corr(κ, forward_returns) 显著性检验（p < 0.05）
+- [ ] 高 κ vs 低 κ 分组的胜率差异
+- [ ] κ 与 ω_t 的条件独立性检验（确认不冗余）
+
+### 证伪条件
+- corr(κ, returns) < 0.05 且 p > 0.1
+- κ 高/低分组无显著胜率差异
+- κ 与 ω_t 相关性 > 0.9（完全冗余）
+
+### 重新评估条件
+- Phase 2 Cluster 数据就绪后，重新评估 κ 在四分量中的权重
+- 如果 κ 被证伪，回退到三分量 E.quality（不含 κ）
 
