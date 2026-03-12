@@ -1,7 +1,7 @@
 # MIF交易策略项目 - 快速导航
 
 > **Market Information Field** - 基于信息场论的加密货币交易策略  
-> **项目状态**: Phase 1 - 数据修复中 + v2.4 理论重写完成
+> **项目状态**: v2.4理论重写完成 | 数据管线迁移中（ATAS → Tardis.dev 过渡期）
 > **NOTE**: 本阶段禁用 cluster_fallback；Cluster 字段由后续独立项目提供（ADR-004）
 
 ---
@@ -78,10 +78,16 @@ Layer 3+: n (Hawkes分支比) - 突破是否自持?
 
 ## 当前任务
 
-**P0**: V14_Final (DOM-only) 封装 + Hawkes tick 级数据管线设计
-**P0.5**: Hawkes MLE 集成与 n 判别力验证
-**P1**: MifClusterExporter 独立项目
-**P2**: 全面回测（含 Hawkes A/B 测试）
+**P0**: 数据管线迁移
+- ATAS indicator修改（输出Tardis-compatible book snapshot格式）
+- 与合作者的数据可视化工具接口对齐
+- 验证ATAS导出 ↔ 工具输入的格式兼容性
+
+**P1**: Hawkes MLE工程化（依赖P0数据管线就绪）
+
+**P2**: Strategy t2端到端回测
+
+**搁置**: Macro MIF v0.1（待重构）、MifClusterExporter（待数据管线评估）
 
 ---
 

@@ -22,6 +22,7 @@
 | `MIF_MSI_Dynamic_Theory.md` | MSI 动态理论 |
 | `MIF_Strategy_Relationalism_Supplement_v2.md` | 策略关系论补充（v2，含 Hawkes 信条扩展） |
 | `ADR-004_V14_Final_DOM_only.md` | V14 Final DOM-only 决策记录 |
+| `MIF_Work_Status_Snapshot_v3.md` | 工作状态快照（v3：v2.4理论重写 + 数据管线迁移） |
 
 ## 模块说明
 ### `src/MIF.AtasIndicator.DOM`
@@ -92,3 +93,8 @@ dotnet test MIF.sln
 - **策略重写**：MIF_Strategy_t1 → t2（引入 Hawkes 判别节点、λ 衰减离场、OP 密集区检测）
 - **关系论补充重写**：新增信条 7（双重确认）和信条 8（动能衰减离场）
 - **ADR-007**：记录 v2.3 不完备手术和 v2.4 完备重写
+
+### v3-snapshot（2026-03-12）
+- **工作快照更新**：v2 → v3，反映v2.4理论重写完成和数据管线迁移启动
+- **数据管线**：从ATAS独立导出转向Tardis.dev兼容格式，与合作者共建数据处理工具
+- **优先级调整**：P0转为数据管线迁移，MifClusterExporter和Macro MIF搁置
