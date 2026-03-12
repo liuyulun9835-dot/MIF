@@ -24,8 +24,6 @@ estimation_method: "dom_proxy_v14"
 - `price_levels`: decimal[20]（可选，仅作标签）
 
 ## 3. Cluster 字段（占位说明）
-- `cluster_levels`: 由后续独立工程 **MifClusterExporter** 产出。
-- `trades_count`、`CVD`、`large_trade_pct` 等精确字段在 MifClusterExporter 完成后回填。
 - 当前阶段不在 DOM-only 导出中出现此字段；如需兼容，可保留 `cluster` 键但填空对象。
 
 ## 4. ρ 定义与校验
