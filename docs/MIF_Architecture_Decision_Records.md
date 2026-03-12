@@ -658,6 +658,7 @@ window = "15m"  # 永远
 | ADR-004 | V14_Final封装(DOM-only) | ✅ Accepted | 2025-11-12 |
 | ADR-005 | MSI多尺度追踪 | 🔄 Proposed | 2025-11-13 |
 | ADR-006 | κ (DOM Resilience) | 🔄 Proposed | 2026-03-11 |
+| ADR-007 | QM脱钩+Hawkes完备集成(v2.4) | ✅ Accepted | 2026-03-12 |
 
 ---
 
@@ -875,4 +876,64 @@ Phase 1 回测显示 80% 信号被成本磨损，部分原因是"推力够强但
 ### 重新评估条件
 - Phase 2 Cluster 数据就绪后，重新评估 κ 在四分量中的权重
 - 如果 κ 被证伪，回退到三分量 E.quality（不含 κ）
+
+---
+
+## ADR-007: QM 形式化脱钩与 Hawkes 完备集成（v2.3→v2.4）
+
+**日期**: 2026-03-12
+**状态**: ✅ Accepted
+**决策者**: Severi + Claude
+
+### 上下文
+v2.3 对 v2.1 的修改是一次不完备的外科手术：
+- Ψ→Γ 符号替换完成，但 Γ_critical 命名碰撞未检查
+- "Hilbert space" 声明残留
+- H_eff = H_0 + V[Γ] + S_ext 哈密顿量分解仅删去虚数单位 i
+- 发明了"结构锁定"术语（在两个框架中都无根基）
+- Hawkes 作为 Section III 末尾的附件层，地位和接口均不明确
+- I(Γ) 与 n 的关系完全空白
+- Section X 版本引用未同步（仍引用 Path integral）
+- Section 5.1 状态与预测分布未拆分
+
+### 决策
+对 v2.1 进行完备重写（v2.4），13 个修改步骤：
+
+1. Ψ→Γ + Γ_critical→γ_rate（冲突检查）
+2. ℏ_m→C_m
+3. 承诺1 符号更新
+4. "定理1"降级为"原理1：信息-时间权衡"
+5. "Hilbert space"→"有限维实内积空间"
+6. Section 5.1 状态/预测分布显式拆分
+7. Lindblad→master equation, 路径积分→转移概率核+Chapman-Kolmogorov
+8. "坍缩/结构锁定"→"regime transition"
+9. exp(iθ) Kuramoto 序参量加注释
+10. Section 6.2 H_eff→Fokker-Planck 算子
+11. Hawkes 提升为 Section 5.6，定义 I(Γ)+n 双重确认接口
+12. Section X 版本比较同步
+13. 元数据更新
+
+### 理由
+1. v2.3 的失败模式是"术语换肤而非框架迁移"
+2. 备忘录的审计诊断（QM 范畴谬误）基本正确，但治疗方案过激
+3. Level 0-5 观测度量体系是信息论标准工具，与 QM 无关，不需要碰
+4. 只有 Section V-VI 的演化框架和 Section II 的推导需要手术
+
+### 后果
+**正面**：
+- 全部 QM 残留清除（经 grep 验证零命中）
+- Hawkes 有明确的流水线位置和接口定义
+- 测不准原理诚实降级，推导中的假设和局限被明确列出
+- 新增 Section 8.3 七场景分析
+
+**负面**：
+- 需要同步更新所有依赖文档（本次 Claude Code 指令处理）
+- v2.3 的编辑指令文件成为废弃历史记录
+
+### 验证
+全部 13 个步骤经逐项 grep 验证通过（见 v2.4 生成记录）
+
+### 重新评估条件
+- 如果 Hawkes MLE 在实际 DOM 数据上不可行（tick 级数据获取失败）→ 需要设计 bar 级近似方案
+- 如果 n 对突破持续性无判别力（empirical 验证失败）→ 需要替代事件层度量
 

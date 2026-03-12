@@ -1,7 +1,7 @@
 # MIF交易策略项目 - 快速导航
 
 > **Market Information Field** - 基于信息场论的加密货币交易策略  
-> **项目状态**: Phase 1 - 数据修复中
+> **项目状态**: Phase 1 - 数据修复中 + v2.4 理论重写完成
 > **NOTE**: 本阶段禁用 cluster_fallback；Cluster 字段由后续独立项目提供（ADR-004）
 
 ---
@@ -9,31 +9,31 @@
 ## 核心文件导航
 
 ### 理论基础
-- `MIF_理论哲学_v2_3.md` - MIF理论框架（v2.3） ⭐⭐⭐
-- `MIF_Strategy_Relationalism_Supplement.md` - 六大策略信条 ⭐⭐⭐⭐
+- `MIF_理论哲学_v2_4.md` - MIF理论框架（v2.4） ⭐⭐⭐
+- `MIF_Strategy_Relationalism_Supplement_v2.md` - 策略信条（v2，含 Hawkes 信条扩展） ⭐⭐⭐⭐
 
 ### 策略实现
-- `MIF_Strategy_t1.md` - **完整策略定义** ⭐⭐⭐⭐⭐
+- `MIF_Strategy_t2.md` - **完整策略定义（鞅/Hawkes 修正版）** ⭐⭐⭐⭐⭐
 - `MIF_Architecture_Decision_Records.md` - 架构决策记录 ⭐⭐⭐⭐
 
 ### 工程实现
 - `MIF_ATAS_Data_Requirements_v1.md` - 数据需求与实现 ⭐⭐⭐⭐⭐
 
 ### 精简版文档(新)
-- `MIF_1_公式总结_精简版_v2_3.md` - 核心公式速查（v2.3）
-- `MIF_2_概念澄清备案_精简版_v2_3.md` - 理论边界澄清（v2.3）
+- `MIF_1_公式总结_精简版_v2_4.md` - 核心公式速查（v2.4）
+- `MIF_2_概念澄清备案_精简版_v2_4.md` - 理论边界澄清（v2.4）
 
 ---
 
 ## 快速启动
 
 ### 理论讨论
-1. 读 `MIF_理论哲学_v2_3.md` (理论基础)
-2. 读 `MIF_Strategy_Relationalism_Supplement.md` (策略信条)
-3. 参考 `MIF_1_公式总结_精简版_v2_3.md` (公式速查)
+1. 读 `MIF_理论哲学_v2_4.md` (理论基础)
+2. 读 `MIF_Strategy_Relationalism_Supplement_v2.md` (策略信条)
+3. 参考 `MIF_1_公式总结_精简版_v2_4.md` (公式速查)
 
 ### 策略优化
-1. 读 `MIF_Strategy_t1.md` (核心策略)
+1. 读 `MIF_Strategy_t2.md` (核心策略)
 2. 读 `MIF_Architecture_Decision_Records.md` (决策背景)
 
 ### 代码实现
@@ -50,6 +50,14 @@
 Layer 1 (环境层): Ω (相干度) - 市场是否可读?
 Layer 2 (存在层): I(Γ) (结构清晰度) - 是否存在稳定结构?
 Layer 3 (相位层): R/D (共振/主导) - 结构如何被推进?
+```
+
+### 突破判别（v2.4 新增）
+```
+Layer 3+: n (Hawkes分支比) - 突破是否自持?
+  n < 1: 假阳性（动能衰减）→ IS 候选被否决
+  n ≥ 1: 真阳性（自激级联）→ IS 确认
+  IS 确认 = I(Γ) > I_critical AND n ≥ n_threshold
 ```
 
 ### 六大策略信条
@@ -70,9 +78,10 @@ Layer 3 (相位层): R/D (共振/主导) - 结构如何被推进?
 
 ## 当前任务
 
-**P0**: 封装 V14_Final (DOM-only) 已设为主线；完成后切至 MifClusterExporter
-**P1**: 建立 MifClusterExporter 独立 .csproj 与数据契约
-**P2**: 实现E三维化
+**P0**: V14_Final (DOM-only) 封装 + Hawkes tick 级数据管线设计
+**P0.5**: Hawkes MLE 集成与 n 判别力验证
+**P1**: MifClusterExporter 独立项目
+**P2**: 全面回测（含 Hawkes A/B 测试）
 
 ---
 

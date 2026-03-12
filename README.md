@@ -13,14 +13,14 @@
 
 | 文件名 | 说明 |
 |--------|------|
-| `MIF_理论哲学_v2_3.md` | MIF 理论哲学主文档（v2.3：量子力学形式对象已替换为经典随机过程；新增 Hawkes IS/UIS 判别层及接口定义） |
-| `MIF_1_公式总结_精简版_v2_3.md` | 核心公式速查（v2.3：ℏ_m → C_m，推导改为 Cramér-Rao 路径） |
-| `MIF_2_概念澄清备案_精简版_v2_3.md` | 理论边界与概念辨析（v2.3：理论基础标注更新为统计物理与信息论） |
-| `MIF_Strategy_t1.md` | MIF 交易策略测试版本 |
+| `MIF_理论哲学_v2_4.md` | MIF 理论哲学主文档（v2.4：QM 形式化完备脱钩；演化方程重写为 Fokker-Planck；Hawkes 突破判别协议集成；七场景分析） |
+| `MIF_1_公式总结_精简版_v2_4.md` | 核心公式速查（v2.4：信息-时间权衡原理；新增 Hawkes 公式节） |
+| `MIF_2_概念澄清备案_精简版_v2_4.md` | 理论边界与概念辨析（v2.4：新增鞅/自激概念辨析；IS 双重确认） |
+| `MIF_Strategy_t2.md` | MIF 交易策略（v2，鞅/Hawkes 修正版，替代 t1） |
 | `MIF_Architecture_Decision_Records.md` | 架构决策记录（ADR） |
 | `MIF_Trading_Metacognition_Whitepaper.md` | 交易元认知白皮书 |
 | `MIF_MSI_Dynamic_Theory.md` | MSI 动态理论 |
-| `MIF_Strategy_Relationalism_Supplement.md` | 策略关系论补充 |
+| `MIF_Strategy_Relationalism_Supplement_v2.md` | 策略关系论补充（v2，含 Hawkes 信条扩展） |
 | `ADR-004_V14_Final_DOM_only.md` | V14 Final DOM-only 决策记录 |
 
 ## 模块说明
@@ -78,3 +78,17 @@ dotnet test MIF.sln
 - **演化方程**：薛定谔形式 i∂U/∂t = H_eff U → 随机过程生成元形式 ∂U/∂t = −H_eff U
 - **传播子**：Feynman 路径积分 → 马尔可夫转移概率核 K(Γ_f, Γ_i; Δt)
 - **新增**：第三章附节"IS/UIS 判别层：Hawkes 过程接口定义"，含四阶段状态机与三个接口变量的精确定义
+
+### v2.4（2026-03-12）
+- **定理降级**："测不准原理"降级为"信息-时间权衡原理"（经验性原理，非定理）
+- **演化方程重写**：H_eff 哈密顿量分解 → Fokker-Planck 算子 + 转移概率核
+- **Hilbert 空间声明移除**：替换为"有限维实内积空间"
+- **坍缩/锁定术语清除**："结构锁定"→"regime transition"
+- **Hawkes 提升**：从 Section III 附件层移至 Section V.6，定义完整判别流水线和 I(Γ)-n 双重确认接口
+- **状态/预测分离**：Section 5.1 显式区分 Γ(t)（可观测状态）和 {P_i(t)}（预测分布）
+- **符号冲突修复**：Γ_critical → γ_rate
+- **exp(iθ) 注释**：明确 Kuramoto 序参量的复指数是 Fourier 相位表示，非量子概率幅
+- **场景分析**：新增 Section 8.3，七个做市商-散户博弈场景的完整 MIF 映射
+- **策略重写**：MIF_Strategy_t1 → t2（引入 Hawkes 判别节点、λ 衰减离场、OP 密集区检测）
+- **关系论补充重写**：新增信条 7（双重确认）和信条 8（动能衰减离场）
+- **ADR-007**：记录 v2.3 不完备手术和 v2.4 完备重写

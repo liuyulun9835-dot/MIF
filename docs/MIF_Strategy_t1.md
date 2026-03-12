@@ -1,5 +1,7 @@
 # MIF Strategy Test v1.0 (t1)
 
+> ⚠️ **已废弃**：本文件已被 `MIF_Strategy_t2.md` 替代（v2.4 鞅/Hawkes 修正版）。保留作为历史参考。
+
 > **Market Information Field 交易策略 - 测试版本**  
 > 基于 MIF v2.1 理论 + MIF_CE_ICI_Spec_v1  
 > 强调: 证伪优先 | 少做精做 | 认知边界
