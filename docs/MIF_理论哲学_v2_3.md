@@ -1,4 +1,7 @@
 # Market Information Field Theory v2.3
+
+> ⚠️ **已废弃**：本文件已被 `MIF_理论哲学_v2_4.md` 替代。保留作为 v2.3 不完备修改的历史记录。
+
 ## 从参与者能量到概率涌现：一个承认认知边界的场论框架
 
 > **Covariance, Background Independence, and Epistemic Humility**
