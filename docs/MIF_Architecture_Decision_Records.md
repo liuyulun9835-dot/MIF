@@ -659,6 +659,7 @@ window = "15m"  # 永远
 | ADR-005 | MSI多尺度追踪 | 🔄 Proposed | 2025-11-13 |
 | ADR-006 | κ (DOM Resilience) | 🔄 Proposed | 2026-03-11 |
 | ADR-007 | QM脱钩+Hawkes完备集成(v2.4) | ✅ Accepted | 2026-03-12 |
+| ADR-008 | I_em→S_bs计算可行性修正(v2.4.1) | ✅ Accepted | 2026-03-12 |
 
 ---
 
@@ -936,4 +937,44 @@ v2.3 对 v2.1 的修改是一次不完备的外科手术：
 ### 重新评估条件
 - 如果 Hawkes MLE 在实际 DOM 数据上不可行（tick 级数据获取失败）→ 需要设计 bar 级近似方案
 - 如果 n 对突破持续性无判别力（empirical 验证失败）→ 需要替代事件层度量
+
+---
+
+## ADR-008: I_em → S_bs 计算可行性修正（v2.4.1）
+
+**日期**: 2026-03-12
+**状态**: ✅ Accepted
+**决策者**: Severi + Claude
+
+### 上下文
+v2.4中ω_p使用嵌入互信息I_em = H[ε_buy]+H[ε_sell]-H[ε_buy,ε_sell]。
+联合熵H[ε_buy, ε_sell]需要估计二维联合分布，但每个DOM快照只有20个paired样本。
+5×5 bins = 25 cells中填20个点，MI估计严重偏高且噪声大。
+同时发现I(Γ)值域声明错误（声称∈[0,1]但z-score公式无界）、
+div J依赖I_em、事件元阈值未明确为分位数、log底数未统一。
+
+### 决策
+1. I_em → S_bs = cos_sim(ε_buy, ε_sell) 作为Phase 1替代
+2. I(Γ)值域修正：无界，阈值使用分位数
+3. div J修正：ΔH_m/Δt - ΔS_bs/Δt
+4. 事件元阈值明确为分位数
+5. 全文log底数统一为log₂
+6. 多处边界防护（除零、空snapshot等）
+
+### 理由
+S_bs在20维空间上精确可算（内积/范数，无统计估计），
+物理含义与I_em高度重叠（买卖侧形状对齐度），
+代价（丢失非线性关联）在20样本下不可避免。
+
+### 后果
+**正面**：所有指标在20层DOM上均可精确计算，无统计估计偏差
+**负面**：S_bs丢失非线性关联；未来I_em可用时需要切换逻辑
+
+### 切换条件
+当pooled estimation可行（100+ bar滑动窗口）且I_em与S_bs的rank correlation > 0.8时，
+可考虑切换回I_em。
+
+### 验证
+- [ ] 在Tardis数据上验证S_bs与I_em的rank correlation
+- [ ] 确认Ω在S_bs替代下仍有IS/UIS区分度
 
